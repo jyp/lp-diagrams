@@ -17,12 +17,12 @@ infix 4 .=.
 type Point = Point' Expr
 
 -- | Orthogonal norm of a vector
-orthonorm :: Monad m => Point -> Diagram m Expr
+orthonorm :: Monad m => Point -> Diagram lab m Expr
 orthonorm (Point x y) =
   (+) <$> absoluteValue x <*> absoluteValue y
 
 -- | Orthogonal distance between points.
-orthoDist :: Monad m => Point -> Point -> Diagram m Expr
+orthoDist :: Monad m => Point -> Point -> Diagram lab m Expr
 orthoDist p q = orthonorm (q-p)
 
 -- | Rotate a vector 90 degres in the trigonometric direction.
@@ -38,7 +38,7 @@ ydiff p q = ypart (q - p)
 -----------------
 -- Point constraints
 
-(.=.),northOf,southOf,westOf,eastOf :: Monad m => Point -> Point -> Diagram m ()
+(.=.),northOf,southOf,westOf,eastOf :: Monad m => Point -> Point -> Diagram lab m ()
 Point x1 y1 .=. Point x2 y2 = do
   x1 === x2
   y1 === y2
@@ -48,15 +48,15 @@ southOf = flip northOf
 westOf (Point x1 _) (Point x2 _) = x1 <== x2
 eastOf = flip westOf
 
-alignHoriz,alignVert :: Monad m => [Point] -> Diagram m ()
+alignHoriz,alignVert :: Monad m => [Point] -> Diagram lab m ()
 alignHoriz = align ypart
 alignVert = align xpart
 
-align :: Monad m => (a -> Expr) -> [a] -> Diagram m ()
+align :: Monad m => (a -> Expr) -> [a] -> Diagram lab m ()
 align _ [] = return ()
 align f (p:ps) = forM_ ps $ \p' -> f p === f p'
 
-alignMatrix :: Monad m => [[Point]] -> Diagram m ()
+alignMatrix :: Monad m => [[Point]] -> Diagram lab m ()
 alignMatrix ls = do
   forM_ ls alignHoriz
   forM_ (transpose ls) alignVert
@@ -64,7 +64,7 @@ alignMatrix ls = do
 ---------------------
 -- Point objectives
 
-southwards, northwards, westwards, eastwards :: Monad m => Point -> Diagram m ()
+southwards, northwards, westwards, eastwards :: Monad m => Point -> Diagram lab m ()
 southwards (Point _ y) = minimize y
 westwards (Point x _) = minimize x
 northwards = southwards . negate

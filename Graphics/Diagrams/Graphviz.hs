@@ -16,7 +16,7 @@ import Data.Foldable
 import Control.Lens (set)
 import Graphics.Typography.Geometry.Bezier (Curve)
 
-graph :: (Monad m,PrintDotRepr g n, ParseDot n, PrintDot n) => (String -> m ()) -> GraphvizCommand -> g n -> Diagram m ()
+graph :: (Monad m,PrintDotRepr g n, ParseDot n, PrintDot n) => (String -> lab) -> GraphvizCommand -> g n -> Diagram lab m ()
 graph labFct cmd gr = graphToDiagram labFct $ layout cmd gr
 
 layout :: (PrintDotRepr g n, ParseDot n, PrintDot n) => GraphvizCommand -> g n -> Gen.DotGraph n
@@ -64,7 +64,7 @@ tipTop def (AType [(_,DotArrow)]) = CircleTip
 tipTop def (AType [(_,Vee)]) = StealthTip
 tipTop def _ = def
 
-graphToDiagram :: forall m n. Monad m => (String -> m ()) -> Gen.DotGraph n -> Diagram m ()
+graphToDiagram :: forall l m n. Monad m => (String -> l) -> Gen.DotGraph n -> Diagram l m ()
 graphToDiagram labFct (Gen.DotGraph _strict _directed _grIdent stmts) = do
   forM_ stmts $ \ stmt -> case stmt of
     (Gen.DE (DotEdge _from _to attrs)) -> do
@@ -99,7 +99,7 @@ graphToDiagram labFct (Gen.DotGraph _strict _directed _grIdent stmts) = do
             _ -> return ()
     _ -> return ()
   where
-  renderLab :: T.Text -> G.Point -> Diagram m ()
+  renderLab :: T.Text -> G.Point -> Diagram l m ()
   renderLab l p = do
     l' <- labelObj $ labFct $ T.unpack $ l
     l' # D.Center .=. pt p

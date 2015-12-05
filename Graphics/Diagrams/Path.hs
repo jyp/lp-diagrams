@@ -117,22 +117,22 @@ circle center r =      Path (pt r 0)
        pt x y = center ^+^ (Point x y)
 
 
-path :: Monad m => Path -> Diagram m ()
+path :: Monad m => Path -> Diagram lab m ()
 path p = do
   options <- view diaPathOptions
   tracePath' <- view (diaBackend . tracePath)
   freeze p (tracePath' options)
 
-frozenPath' :: Monad m => FrozenPath -> Diagram m ()
+frozenPath' :: Monad m => FrozenPath -> Diagram lab m ()
 frozenPath' p = do
   options <- view diaPathOptions
   tracePath' <- view (diaBackend . tracePath)
   freeze [] $ \_ -> tracePath' options p
 
-stroke :: Monad m => Color -> Diagram m a -> Diagram m a
+stroke :: Monad m => Color -> Diagram lab m a -> Diagram lab m a
 stroke color = using (outline color)
 
-draw :: Monad m => Diagram m a -> Diagram m a
+draw :: Monad m => Diagram lab m a -> Diagram lab m a
 draw = stroke "black"
 
 noOutline :: PathOptions -> PathOptions
@@ -147,7 +147,7 @@ fill color = set fillColor (Just color)
 zigzagDecoration :: PathOptions -> PathOptions
 zigzagDecoration = set decoration (Decoration "zigzag")
 
-using :: Monad m => (PathOptions -> PathOptions) -> Diagram m a -> Diagram m a
+using :: Monad m => (PathOptions -> PathOptions) -> Diagram lab m a -> Diagram lab m a
 using f = local (over diaPathOptions f)
 
 ultraThin, veryThin, thin, semiThick, thick, veryThick, ultraThick :: Constant

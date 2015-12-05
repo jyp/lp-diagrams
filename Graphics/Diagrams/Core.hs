@@ -137,13 +137,13 @@ data BoxSpec = BoxSpec {boxWidth, boxHeight, boxDepth :: Double}
 nilBoxSpec :: BoxSpec
 nilBoxSpec = BoxSpec 0 0 0
 
-data Backend m = forall.
+data Backend lab m =
                  Backend {_tracePath :: PathOptions -> FrozenPath -> m ()
                          ,_traceLabel :: forall location (x :: * -> *). Monad x =>
                                                  (location -> (FrozenPoint -> m ()) -> x ()) -> -- freezer
                                                  (forall a. m a -> x a) -> -- embedder
                                                  location ->
-                                                 m () -> -- label specification
+                                                 lab -> -- label specification
                                                  x BoxSpec
                          }
 
@@ -159,9 +159,9 @@ data Backend m = forall.
 
 $(makeLenses ''Backend) -- does not work due to the existential
 
-data Env m = Env {_diaTightness :: Constant -- ^ Multiplicator to minimize constraints
-                  ,_diaPathOptions :: PathOptions
-                  ,_diaBackend :: Backend m}
+data Env lab m = Env {_diaTightness :: Constant -- ^ Multiplicator to minimize constraints
+                     ,_diaPathOptions :: PathOptions
+                     ,_diaBackend :: Backend lab m}
 
 $(makeLenses ''Env)
 
@@ -183,13 +183,13 @@ defaultPathOptions = PathOptions
 data Freeze m where
   Freeze :: forall t m. Functor t => (t Constant -> m ()) -> t Expr -> Freeze m
 
-newtype Diagram m a = Dia (RWST (Env m) [Freeze m] (Var,LPState) m a)
-  deriving (Monad, Applicative, Functor, MonadReader (Env m), MonadWriter [Freeze m])
+newtype Diagram lab m a = Dia (RWST (Env lab m) [Freeze m] (Var,LPState) m a)
+  deriving (Monad, Applicative, Functor, MonadReader (Env lab m), MonadWriter [Freeze m])
 
-freeze :: (Functor t, Monad m) => t Expr -> (t Constant -> m ()) -> Diagram m ()
+freeze :: (Functor t, Monad m) => t Expr -> (t Constant -> m ()) -> Diagram lab m ()
 freeze x f = tell [Freeze (\y -> (f y)) x]
 
-instance Monad m => MonadState LPState (Diagram m) where
+instance Monad m => MonadState LPState (Diagram lab m) where
   get = Dia $ snd <$> get
   put y = Dia $ do
     (x,_) <- get
@@ -199,13 +199,13 @@ instance Monad m => MonadState LPState (Diagram m) where
 -- Diagrams
 
 
-relax :: Monad m => Constant -> Diagram m a -> Diagram m a
+relax :: Monad m => Constant -> Diagram lab m a -> Diagram lab m a
 relax factor = tighten (1/factor)
 
-tighten :: Monad m => Constant -> Diagram m a -> Diagram m a
+tighten :: Monad m => Constant -> Diagram lab m a -> Diagram lab m a
 tighten factor = local (over diaTightness (* factor))
 
--- instance Monoid (Diagram m ()) where
+-- instance Monoid (Diagram lab m ()) where
 --   mempty = return ()
 --   mappend = (>>)
 
@@ -215,21 +215,21 @@ tighten factor = local (over diaTightness (* factor))
 --------------
 -- Variables
 
-rawNewVar :: Monad m => Diagram m Var
+rawNewVar :: Monad m => Diagram lab m Var
 rawNewVar = Dia $ do
       (Var x,y) <- get
       put $ (Var (x+1),y)
       return $ Var x
 
-newVar :: Monad m => Diagram m Expr
+newVar :: Monad m => Diagram lab m Expr
 newVar = do
   [v] <- newVars [ContVar]
   return v
 
-newVars :: Monad m => [VarKind] -> Diagram m [Expr]
+newVars :: Monad m => [VarKind] -> Diagram lab m [Expr]
 newVars kinds = newVars' (zip kinds (repeat Free))
 
-newVars' :: Monad m => [(VarKind,Bounds Constant)] -> Diagram m [Expr]
+newVars' :: Monad m => [(VarKind,Bounds Constant)] -> Diagram lab m [Expr]
 newVars' kinds = forM kinds $ \(k,b) -> do
   v <- rawNewVar
   setVarKind v k
@@ -249,7 +249,7 @@ instance Num Expr where
   (+) = (^+^)
   (-) = (^-^)
 
-runDiagram :: Monad m => Backend m -> Diagram m a -> m a
+runDiagram :: Monad m => Backend lab m -> Diagram lab m a -> m a
 runDiagram backend (Dia diag) = do
   (a,(_,problem),ds) <- runRWST diag (Env 1 defaultPathOptions backend)
                                         (Var 0,LP Min M.empty [] M.empty M.empty)
@@ -278,26 +278,26 @@ infixr 6 *-
 avg :: Module Constant a => [a] -> a
 avg xs = (1/fromIntegral (length xs)) *- gsum xs
 
-absoluteValue :: Monad m => Expr -> Diagram m Expr
+absoluteValue :: Monad m => Expr -> Diagram lab m Expr
 absoluteValue x = do
   [t1,t2] <- newVars' [(ContVar,LBound 0),(ContVar,LBound 0)]
   t1 - t2 === x
   return $ t1 + t2
 
-satAll :: Monad m => (Expr -> a -> Diagram m b) -> [a] -> Diagram m Expr
+satAll :: Monad m => (Expr -> a -> Diagram lab m b) -> [a] -> Diagram lab m Expr
 satAll p xs = do
   [m] <- newVars [ContVar]
   mapM_ (p m) xs
   return m
 
 -- | Minimum or maximum of a list of expressions.
-maximVar, minimVar :: Monad m => [Expr] -> Diagram m Expr
+maximVar, minimVar :: Monad m => [Expr] -> Diagram lab m Expr
 maximVar = satAll (>==)
 minimVar = satAll (<==)
 
 --------------
 -- Expression constraints
-(===), (>==), (<==) :: Expr -> Expr -> Monad m => Diagram m ()
+(===), (>==), (<==) :: Expr -> Expr -> Monad m => Diagram lab m ()
 e1 <== e2 = do
   let LinExpr f c = e1 - e2
   leqTo f (negate c)
@@ -309,23 +309,23 @@ e1 === e2 = do
   equalTo f (negate c)
 
 -- | minimize the distance between expressions
-(=~=) :: Monad m => Expr -> Expr -> Diagram m ()
+(=~=) :: Monad m => Expr -> Expr -> Diagram lab m ()
 x =~= y = minimize =<< absoluteValue (x-y)
 
 -------------------------
 -- Expression objectives
 
-minimize,maximize :: Monad m => Expr -> Diagram m ()
+minimize,maximize :: Monad m => Expr -> Diagram lab m ()
 minimize (LinExpr x _) = do
   tightness <- view diaTightness
   addObjective (tightness *- x)
 maximize = minimize . negate
 
 
-drawText :: Monad m => Point' Expr -> m () -> Diagram m BoxSpec
+drawText :: Monad m => Point' Expr -> lab -> Diagram lab m BoxSpec
 drawText point lab = do
   tl <- view (diaBackend . traceLabel)
   tl freeze diaRaw point lab
 
-diaRaw :: Monad m => m a -> Diagram m a
+diaRaw :: Monad m => m a -> Diagram lab m a
 diaRaw = Dia . lift
