@@ -244,18 +244,23 @@ insideBox p o = do
   (o # SW) .<. p
   p .<. (o # NE)
 
--- | @autoLabel label i@ Layouts the label at the given incidence
+-- | @autoLabel o i@ Layouts the label object @o@ at the given incidence
 -- vector.
-autoLabel :: Monad m => Box -> OVector -> Diagram lab m ()
-autoLabel lab (OVector pt norm) = do
+autoLabelObj :: Monad m => Box -> OVector -> Diagram lab m ()
+autoLabelObj lab (OVector pt norm) = do
   pt `insideBox` lab
   minimize =<< orthoDist (lab#Center) (pt + norm)
 
+-- | @autoLabel o i@ Layouts the label object @o@ at the given incidence
+-- vector.
+autoLabel :: Monad m => lab -> OVector -> Diagram lab m ()
+autoLabel lab i = do
+  o <- labelObj lab
+  autoLabelObj o i
+
 -- | @labeledEdge label source target@
 labeledEdge :: Monad m => Object -> Object -> Box -> Diagram lab m ()
-labeledEdge source target lab = autoLabel lab =<< edge source target
-
-
+labeledEdge source target lab = autoLabelObj lab =<< edge source target
 
 -------------------
 -- Even higher-level primitives:
