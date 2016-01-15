@@ -27,7 +27,7 @@ library
                        Graphics.Diagrams.Core,
                        Graphics.Diagrams.DerivationTrees,
                        Graphics.Diagrams
-  build-depends:       base >=4.8,
+  build-depends:       base >=4.8 && < 666,
                        lens >=4.12,
                        text >=1.2 ,
                        typography-geometry >=1.0 ,
