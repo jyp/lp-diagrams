@@ -5,7 +5,7 @@ import Control.Monad.LPMonad
 import Prelude hiding (sum,mapM_,mapM,concatMap)
 import Control.Monad.RWS hiding (forM,forM_,mapM_,mapM)
 import Data.LinearProgram
-import Data.LinearProgram.Common as Graphics.Diagrams.Core (VarKind(..)) 
+import Data.LinearProgram.Common as Graphics.Diagrams.Core (VarKind(..))
 import Data.LinearProgram.LinExpr
 import Data.Map (Map)
 import qualified Data.Map as M
@@ -278,6 +278,8 @@ infixr 6 *-
 avg :: Module Constant a => [a] -> a
 avg xs = (1/fromIntegral (length xs)) *- gsum xs
 
+-- | Absolute value, which can be MINIMIZED or put and upper bound on (but not
+-- the other way around).
 absoluteValue :: Monad m => Expr -> Diagram lab m Expr
 absoluteValue x = do
   [t1,t2] <- newVars' [(ContVar,LBound 0),(ContVar,LBound 0)]
