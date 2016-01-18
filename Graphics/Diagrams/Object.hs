@@ -2,16 +2,13 @@
 
 module Graphics.Diagrams.Object where
 
--- import MarXup
--- import MarXup.Tex
 import Graphics.Diagrams.Path
 import Graphics.Diagrams.Point
 import Graphics.Diagrams.Core
 import Control.Monad
--- import Control.Applicative
--- import Data.Algebra
--- import Data.List (intersperse)
 import Control.Lens (set,view)
+import Algebra.Classes
+import Prelude hiding (Num(..))
 
 data Anchor = Center | N | NW | W | SW | S | SE | E | NE | BaseW | Base | BaseE
   deriving Show
@@ -24,7 +21,7 @@ data Object = Object {objectOutline :: Path, objectAnchorage :: Anchorage}
 
 class Anchored a where
   anchors :: a -> Anchorage
-  
+
 infix 8 #
 
 (#) :: Anchored a => a -> Anchor -> Point
@@ -53,22 +50,22 @@ extend e o = Anchorage $ \a -> o # a + shiftInDir a e
 
 -- | Makes a shift of size 'd' in the given direction.
 shiftInDir :: Anchor -> Expr -> Point
-shiftInDir N d = 0 `Point` d
-shiftInDir S d = 0 `Point` negate d
-shiftInDir W d = negate d `Point` 0
-shiftInDir BaseW d = negate d `Point` 0
-shiftInDir E d  = d `Point` 0
-shiftInDir BaseE d  = d `Point` 0
+shiftInDir N d = zero `Point` d
+shiftInDir S d = zero `Point` negate d
+shiftInDir W d = negate d `Point` zero
+shiftInDir BaseW d = negate d `Point` zero
+shiftInDir E d  = d `Point` zero
+shiftInDir BaseE d  = d `Point` zero
 shiftInDir NW d = negate d `Point` d
 shiftInDir SE d = d `Point` negate d
 shiftInDir SW d = negate d `Point` negate d
 shiftInDir NE d = d `Point` d
-shiftInDir _ _  = 0 `Point` 0
+shiftInDir _ _  = zero `Point` zero
 
 -- | Make a label object. This is just some text surrounded by 4
 -- points of blank.
 mkLabel :: Monad m => lab -> Diagram lab m Anchorage
-mkLabel texCode = extend 4 <$> labelBox texCode
+mkLabel texCode = extend (constant 4) <$> labelBox texCode
 
 labelObj :: Monad m => lab -> Diagram lab m Box
 labelObj = rectangleShape <=< mkLabel
@@ -97,14 +94,14 @@ box = do
   n >== base
   base >== s
   w <== e
-  
+
   midx === avg [w,e]
   midy === avg [n,s]
   let pt = flip Point
   return $ Anchorage $ \anch -> case anch of
     NW     -> pt n    w
     N      -> pt n    midx
-    NE     -> pt n    e  
+    NE     -> pt n    e
     E      -> pt midy e
     SE     -> pt s    e
     S      -> pt s    midx
@@ -126,7 +123,7 @@ vrule = do
 hrule :: Monad m => Diagram lab m Anchorage
 hrule = do
   o <- box
-  height o === 0
+  height o === zero
   return o
 
 height, width, ascent, descent :: Anchored a => a -> Expr
@@ -141,17 +138,17 @@ o `fitsVerticallyIn` o' = do
   let dyN = ypart $ o' # N - o # N
       dyS = ypart $ o # S - o' # S
   minimize dyN
-  dyN >== 0
+  dyN >== zero
   minimize dyS
-  dyS >== 0
+  dyS >== zero
 
 o `fitsHorizontallyIn` o' = do
   let dyW = xpart $ o # W - o' # W
       dyE = xpart $ o' # E - o # E
   minimize dyW
-  dyW >== 0
+  dyW >== zero
   minimize dyE
-  dyE >== 0
+  dyE >== zero
 
 a `fitsIn` b = do
   a `fitsHorizontallyIn` b
@@ -217,7 +214,7 @@ infixr :%>
 instance Functor (FList xs) where
   fmap _ NIL = NIL
   fmap f (x :%> xs) = fmap f x :%> fmap f xs
-  
+
 -- | Traces a straight edge between two objects.
 -- A vector originated at the midpoint and pointing perpendicular to
 -- the edge is returned.
@@ -266,7 +263,7 @@ labeledEdge source target lab = autoLabelObj lab =<< edge source target
 -- Even higher-level primitives:
 
 nodeDistance :: Expr
-nodeDistance = 5
+nodeDistance = constant 5
 
 leftOf :: Monad m => Object -> Object -> Diagram lab m ()
 a `leftOf` b = spread hdist nodeDistance [a,b]
@@ -286,7 +283,7 @@ spread _ _ _ = return ()
 -- | A node: a labeled circle
 node :: Monad m => lab -> Diagram lab m Object
 node lab = do
-  l <- extend 4 <$> labelBox lab
+  l <- extend (constant 4) <$> labelBox lab
   c <- draw $ circleShape
   l `fitsIn` c
   l # Center .=. c # Center

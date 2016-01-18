@@ -24,6 +24,8 @@ import Data.LabeledTree
 import Data.Monoid
 import Graphics.Diagrams as D
 import qualified Data.Tree as T
+import Algebra.Classes
+import Prelude hiding (Num(..))
 ------------------
 --- Basics
 
@@ -71,13 +73,13 @@ derivationTreeDiag :: Monad m => Derivation lab -> Diagram lab m ()
 derivationTreeDiag d = do
   [h] <- newVars [ContVar] -- the height of a layer in the tree.
   minimize h
-  h >== 1
+  h >== constant 1
   tree@(T.Node (_,n,_) _) <- toDiagram h d
   forM_ (T.levels tree) $ \ls ->
     case ls of
       [] -> return ()
       (_:ls') -> forM_ (zip ls ls') $ \((_,_,l),(r,_,_)) ->
-        (l + Point 10 0) `westOf` r
+        (l + Point (constant 10) zero) `westOf` r
   let leftFringe = map head nonNilLevs
       rightFringe = map last nonNilLevs
       nonNilLevs = filter (not . null) $ T.levels tree
@@ -87,7 +89,7 @@ derivationTreeDiag d = do
   forM_ rightFringe $ \(_,_,p) ->
     xpart p <== rightMost
   minimize $ 10 *- (rightMost - leftMost)
-  n # Center .=. Point 0 0
+  n # Center .=. zero
 
 toDiagPart :: Monad m => Expr -> Premise lab -> Diagram lab m (T.Tree (Point,Anchorage,Point))
 toDiagPart layerHeight (Link{..} ::> rul)
@@ -115,7 +117,7 @@ toDiagPart layerHeight (Link{..} ::> rul)
 chainBases :: Monad m => Expr -> [Anchorage] -> Diagram lab m (Anchorage,Expr)
 chainBases _ [] = do
   o <- box
-  return (o,0)
+  return (o,zero)
 chainBases spacing ls = do
   grp <- box
   forM_ [Base,N,S] $ \ anch -> do
@@ -143,12 +145,12 @@ relaxHeight o = do
 toDiagram :: Monad m => Expr -> Derivation lab -> Diagram lab m (T.Tree (Point,Anchorage,Point))
 toDiagram layerHeight (Node Rule{..} premises) = do
   ps <- mapM (toDiagPart layerHeight) premises
-  concl <- relaxHeight =<< extend 1.5 <$> labelBox conclusion
+  concl <- relaxHeight =<< extend (constant 1.5) <$> labelBox conclusion
   -- using (outline "red")$ traceBounds concl
   lab <- labelBox ruleLabel
 
   -- Grouping
-  (psGrp,premisesDist) <- chainBases 10 [p | T.Node (_,p,_) _ <- ps]
+  (psGrp,premisesDist) <- chainBases (constant 10) [p | T.Node (_,p,_) _ <- ps]
   -- using (outline "blue" . denselyDotted) $ traceBounds psGrp
   height psGrp === layerHeight
 
@@ -161,12 +163,12 @@ toDiagram layerHeight (Node Rule{..} premises) = do
   concl `fitsHorizontallyIn` separ
 
   -- rule label
-  lab # BaseW .=. separ # E + Point 3 (negate 1)
+  lab # BaseW .=. separ # E + Point (constant 3) (constant (negate 1))
 
 
   -- layout hints (not necessary for "correctness")
   let xd = xdiff (separ # W) (psGrp # W)
-  xd   === xdiff (psGrp # E) (separ # E) 
+  xd   === xdiff (psGrp # E) (separ # E)
   relax 2 $ (2 *- xd) =~= premisesDist
   -- centering of conclusion
   xd' <- absoluteValue $ xdiff (separ # Center) (concl # Center)
@@ -196,4 +198,3 @@ haltDrv' tex (Node r _) = Node r {ruleStyle = noOutline}
      [lnk {steps = 1, label = tex} ::> emptyDrv]
   where lnk :: Link lab
         lnk = defaultLink
-

@@ -6,19 +6,17 @@ import Graphics.Diagrams.Core
 import Graphics.Diagrams.Point
 import Data.Traversable
 import Data.Foldable
-import Data.Algebra
--- import Data.Traversable
--- import Data.Foldable
 import Graphics.Typography.Geometry.Bezier
-import Graphics.Typography.Geometry.Bezier as Graphics.Diagrams.Point (Curve) 
+import Graphics.Typography.Geometry.Bezier as Graphics.Diagrams.Point (Curve)
 import Control.Applicative
 import Data.List (sort,transpose)
 import Data.Maybe (listToMaybe)
-import Prelude hiding (sum,mapM_,mapM,concatMap,maximum,minimum)
+import Prelude hiding (sum,mapM_,mapM,concatMap,maximum,minimum,Num(..),(/))
 import qualified Data.Vector.Unboxed as V
 import Algebra.Polynomials.Bernstein (restriction,Bernsteinp(..))
 import Control.Lens (over, set, view)
 import Control.Monad.Reader (local)
+import Algebra.Classes
 
 unfreeze :: Functor t => t Constant -> t Expr
 unfreeze = fmap constant
@@ -69,7 +67,7 @@ cutAfter' [] _cutter = []
 cutAfter' (b:bs) cutter = case clipOne b cutter of
   Nothing -> b:cutAfter' bs cutter
   Just b' -> [b']
- 
+
 revBernstein (Bernsteinp n c) = Bernsteinp n (V.reverse c)
 revBeziers :: [Curve] -> [Curve]
 revBeziers = reverse . map rev
@@ -105,16 +103,16 @@ polygon (x:xs) = Path x (map StraightTo xs ++ [Cycle])
 
 -- | Circle approximated with 4 cubic bezier curves
 circle :: Point -> Expr -> Path
-circle center r =      Path (pt r 0)
-                         [CurveTo (pt r k) (pt k r) (pt 0 r),
-                          CurveTo (pt (-k) r) (pt (-r) k) (pt (-r) 0),
-                          CurveTo (pt (-r) (-k)) (pt (-k) (-r)) (pt 0 (-r)),
-                          CurveTo (pt k (-r)) (pt r (-k)) (pt r 0),
+circle center r =      Path (pt r zero)
+                         [CurveTo (pt r k) (pt k r) (pt zero r),
+                          CurveTo (pt (negate k) r) (pt (negate r) k) (pt (negate r) zero),
+                          CurveTo (pt (negate r) (negate k)) (pt (negate k) (negate r)) (pt zero (negate r)),
+                          CurveTo (pt k (negate r)) (pt r (negate k)) (pt r zero),
                           Cycle]
  where k1 :: Constant
        k1 = 4 * (sqrt 2 - 1) / 3
        k = k1 *^ r
-       pt x y = center ^+^ (Point x y)
+       pt x y = center + (Point x y)
 
 
 path :: Monad m => Path -> Diagram lab m ()
@@ -171,4 +169,3 @@ looselyDashed     o@PathOptions{..} = o { _dashPattern = [(3, 6)] }
 dashDotted        o@PathOptions{..} = o { _dashPattern = [(3, 2), (_lineWidth, 2)] }
 denselyDashdotted o@PathOptions{..} = o { _dashPattern = [(3, 1), (_lineWidth, 1)] }
 looselyDashdotted o@PathOptions{..} = o { _dashPattern = [(3, 4), (_lineWidth, 4)] }
-

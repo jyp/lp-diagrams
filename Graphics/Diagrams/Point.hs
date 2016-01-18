@@ -6,11 +6,12 @@ import Graphics.Diagrams.Core
 import Data.Foldable
 import Control.Applicative
 import Data.List (transpose)
-import Prelude hiding (sum,mapM_,mapM,concatMap,maximum,minimum)
+import Prelude hiding (sum,mapM_,mapM,concatMap,maximum,minimum,Num(..))
+import Algebra.Classes
 
 infix 4 .=.
 ----------------
--- Points 
+-- Points
 -- | A point in 2d space
 
 

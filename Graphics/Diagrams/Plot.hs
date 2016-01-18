@@ -6,6 +6,8 @@ import Graphics.Diagrams.Path
 import Graphics.Diagrams.Object
 import Graphics.Diagrams.Point
 import Control.Monad (forM_,when)
+import Algebra.Classes
+import Prelude hiding (Num(..),(/))
 
 type Vec2 = Point'
 type Transform a = Iso a Constant
@@ -19,13 +21,13 @@ axisGen origin target anch labels = do
   when (not $ null $ labels) $ do
     forM_ labels $ \(p,txt) -> do
       l0 <- labelObj txt
-      let l = extend 3 (anchors l0)
+      let l = extend (constant 3) (anchors l0)
       draw $ path $ polyline [l0 # anch, l # anch]
       l # anch .=. Point (lint p (xpart origin) (xpart target))
                          (lint p (ypart origin) (ypart target))
 
 -- | @scale minx maxx@ maps the interval [minx,maxx] to [0,1]
-scale :: forall b. Fractional b => b -> b -> Iso b b
+scale :: forall b. Field b => b -> b -> Iso b b
 scale minx maxx = Iso (\x -> (x - minx) / (maxx - minx))
                       (\x -> x * (maxx - minx) + minx)
 

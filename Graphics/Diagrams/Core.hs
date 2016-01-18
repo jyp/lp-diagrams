@@ -2,7 +2,7 @@
 
 module Graphics.Diagrams.Core (module Graphics.Diagrams.Core) where
 import Control.Monad.LPMonad
-import Prelude hiding (sum,mapM_,mapM,concatMap)
+import Prelude hiding (sum,mapM_,mapM,concatMap,Num(..),(/))
 import Control.Monad.RWS hiding (forM,forM_,mapM_,mapM)
 import Data.LinearProgram
 import Data.LinearProgram.Common as Graphics.Diagrams.Core (VarKind(..))
@@ -43,15 +43,15 @@ instance Applicative Point' where
   pure x = Point x x
   Point f g <*> Point x y = Point (f x) (g y)
 
-instance Group a => Num (Point' a) where
-  negate = neg
-  (+) = (^+^)
-  (-) = (^-^)
+instance Additive a => Additive (Point' a) where
+  zero = Point zero zero
+  Point x1 y1 + Point x2 y2 = Point (x1 + x2) (y1 + y2)
+
+instance AbelianAdditive v => AbelianAdditive (Point' v) where
 
 instance Group v => Group (Point' v) where
-  zero = Point zero zero
-  Point x1 y1 ^+^ Point x2 y2 = Point (x1 ^+^ x2) (y1 ^+^ y2)
-  neg (Point x y) = Point (neg x) (neg y)
+  negate (Point x y) = Point (negate x) (negate y)
+  Point x1 y1 - Point x2 y2 = Point (x1 - x2) (y1 - y2)
 
 instance Module Constant v => Module Constant (Point' v) where
   k *^ Point x y = Point (k *^ x) (k *^ y)
@@ -240,14 +240,6 @@ infix 4 <==,===,>==
 
 ----------------
 -- Expressions
-instance Fractional Expr where
-  fromRational ratio = constant (fromRational ratio)
-
-instance Num Expr where
-  fromInteger x = LinExpr M.empty (fromInteger x)
-  negate = neg
-  (+) = (^+^)
-  (-) = (^-^)
 
 runDiagram :: Monad m => Backend lab m -> Diagram lab m a -> m a
 runDiagram backend (Dia diag) = do
@@ -266,7 +258,7 @@ valueIn sol (LinExpr m c) = sum (c:[scale * varValue v | (v,scale) <- M.assocs m
  where varValue v = M.findWithDefault 0 v sol
 
 variable :: Var -> Expr
-variable v = LinExpr (var v) 0
+variable v = LinExpr (M.singleton v 1) 0
 
 constant :: Constant -> Expr
 constant c = LinExpr M.empty c
@@ -276,7 +268,7 @@ constant c = LinExpr M.empty c
 infixr 6 *-
 
 avg :: Module Constant a => [a] -> a
-avg xs = (1/fromIntegral (length xs)) *- gsum xs
+avg xs = (1/fromIntegral (length xs)) *- add xs
 
 -- | Absolute value, which can be MINIMIZED or put and upper bound on (but not
 -- the other way around).

@@ -31,6 +31,7 @@ library
                        lens >=4.12,
                        text >=1.2 ,
                        typography-geometry >=1.0 ,
+                       gasp,
                        glpk-hs >=0.3 ,
                        vector,
                        polynomials-bernstein,
