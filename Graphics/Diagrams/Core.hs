@@ -12,8 +12,6 @@ import qualified Data.Map as M
 import Control.Lens hiding (element)
 import Data.Traversable
 import Data.Foldable
--- import MarXup.MultiRef (BoxSpec)
--- import MarXup.Tex
 import System.IO.Unsafe
 
 type LPState = LP Var Constant
@@ -147,25 +145,13 @@ data Backend lab m =
                                                  x BoxSpec
                          }
 
-
--- tracePath :: Lens' (Backend m) (PathOptions -> FrozenPath -> m ())
--- tracePath f (Backend {..}) = fmap (\a -> Backend {_tracePath = a,..}) (f _tracePath)
-
--- renderLabel :: Lens' (Backend m) (FrozenPoint -> m () -> m ())
--- renderLabel f (Backend {..}) = fmap (\a -> Backend {_renderLabel = a,..}) (f _renderLabel)
-
--- declareLabel :: Lens' (Backend m) (FrozenPoint -> m () -> m ())
--- declareLabel f (Backend {..}) = fmap (\a -> Backend {_declareLabel = a,..}) (f _declareLabel)
-
-$(makeLenses ''Backend) -- does not work due to the existential
+$(makeLenses ''Backend)
 
 data Env lab m = Env {_diaTightness :: Constant -- ^ Multiplicator to minimize constraints
                      ,_diaPathOptions :: PathOptions
                      ,_diaBackend :: Backend lab m}
 
 $(makeLenses ''Env)
-
-
 
 defaultPathOptions :: PathOptions
 defaultPathOptions = PathOptions
@@ -204,13 +190,6 @@ relax factor = tighten (1/factor)
 
 tighten :: Monad m => Constant -> Diagram lab m a -> Diagram lab m a
 tighten factor = local (over diaTightness (* factor))
-
--- instance Monoid (Diagram lab m ()) where
---   mempty = return ()
---   mappend = (>>)
-
--- instance IsString (Diagram ()) where
---   fromString = diaRawTex . tex
 
 --------------
 -- Variables
