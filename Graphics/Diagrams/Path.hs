@@ -4,12 +4,9 @@ module Graphics.Diagrams.Path where
 
 import Graphics.Diagrams.Core
 import Graphics.Diagrams.Point
-import Data.Traversable
 import Data.Foldable
 import Graphics.Typography.Geometry.Bezier
-import Graphics.Typography.Geometry.Bezier as Graphics.Diagrams.Point (Curve)
-import Control.Applicative
-import Data.List (sort,transpose)
+import Data.List (sort)
 import Data.Maybe (listToMaybe)
 import Prelude hiding (sum,mapM_,mapM,concatMap,maximum,minimum,Num(..),(/))
 import qualified Data.Vector.Unboxed as V
@@ -18,24 +15,27 @@ import Control.Lens (over, set, view)
 import Control.Monad.Reader (local)
 import Algebra.Classes
 
-unfreeze :: Functor t => t Constant -> t Expr
-unfreeze = fmap constant
-
 toBeziers :: FrozenPath -> [Curve]
 toBeziers EmptyPath = []
 toBeziers (Path start ss) | not (null ss) &&
                             isCycle (last ss) = toBeziers' start (init ss ++ [StraightTo start])
                           | otherwise = toBeziers' start ss
 
+curveSegment :: FrozenPoint
+                  -> FrozenPoint -> FrozenPoint -> FrozenPoint -> Curve
 curveSegment (Point xa ya) (Point xb yb) (Point xc yc) (Point xd yd) = bezier3 xa ya xb yb xc yc xd yd
-lineSegment (Point xa ya) (Point xb yb) = line xa ya xb yb
 
+-- lineSegment :: Point' Double -> Point' Double -> Curve
+-- lineSegment (Point xa ya) (Point xb yb) = line xa ya xb yb
+
+-- | Convert a Path into a Curve
 toBeziers' :: FrozenPoint -> [Frozen Segment] -> [Curve]
 toBeziers' _ [] = []
 toBeziers' start (StraightTo next:ss) = curveSegment start mid mid next : toBeziers' next ss
   where mid = avg [start, next]
 toBeziers' p (CurveTo c d q:ss) = curveSegment p c d q : toBeziers' q ss
 
+-- | Convert a Curve into a Path
 fromBeziers :: [Curve] -> FrozenPath
 fromBeziers [] = EmptyPath
 fromBeziers (Bezier cx cy t0 t1:bs) = case map toPt $ V.foldr (:) [] cxy of
@@ -50,16 +50,16 @@ pathSegments :: Path' t -> [Segment t]
 pathSegments EmptyPath = []
 pathSegments (Path _ ss) = ss
 
+isCycle :: Segment t -> Bool
 isCycle Cycle = True
 isCycle _  = False
 
-frozenPointElim (Point x y) f = f x y
-
-splitBezier (Bezier cx cy t0 t1) (u,v,_,_) = (Bezier cx cy t0 u, Bezier cx cy v t1)
-
+-- | @clipOne c0 cs@ return the part of c0 from its start to the point where it
+-- intersects any element of cs.
 clipOne :: Curve -> [Curve] -> Maybe Curve
 clipOne b cutter = fmap firstPart $ listToMaybe $ sort $ concatMap (inter b) cutter
   where firstPart t = fst $ splitBezier b t
+        splitBezier (Bezier cx cy t0 t1) (u,v,_,_) = (Bezier cx cy t0 u, Bezier cx cy v t1)
 
 -- | @cutAfter path area@ cuts the path after its first intersection with the @area@.
 cutAfter', cutBefore' :: [Curve] -> [Curve] -> [Curve]
@@ -68,10 +68,11 @@ cutAfter' (b:bs) cutter = case clipOne b cutter of
   Nothing -> b:cutAfter' bs cutter
   Just b' -> [b']
 
-revBernstein (Bernsteinp n c) = Bernsteinp n (V.reverse c)
+-- | Reverse a bezier curve
 revBeziers :: [Curve] -> [Curve]
 revBeziers = reverse . map rev
   where rev (Bezier cx cy t0 t1) = (Bezier (revBernstein cx) (revBernstein cy) (1-t1) (1-t0))
+        revBernstein (Bernsteinp n c) = Bernsteinp n (V.reverse c)
 
 cutBefore' path area = revBeziers $ cutAfter' (revBeziers path) area
 
