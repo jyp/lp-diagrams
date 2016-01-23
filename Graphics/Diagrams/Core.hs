@@ -166,12 +166,14 @@ defaultPathOptions = PathOptions
   ,_decoration = Decoration ""
   }
 
+-- | Some action to perform after a solution has been found.
 data Freeze m where
   Freeze :: forall t m. Functor t => (t Constant -> m ()) -> t Expr -> Freeze m
 
 newtype Diagram lab m a = Dia (RWST (Env lab m) [Freeze m] (Var,LPState) m a)
   deriving (Monad, Applicative, Functor, MonadReader (Env lab m), MonadWriter [Freeze m])
 
+-- | @freeze x f@ performs @f@ on the frozen value of @x@.
 freeze :: (Functor t, Monad m) => t Expr -> (t Constant -> m ()) -> Diagram lab m ()
 freeze x f = tell [Freeze (\y -> (f y)) x]
 

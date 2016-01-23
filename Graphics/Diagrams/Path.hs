@@ -25,8 +25,8 @@ curveSegment :: FrozenPoint
                   -> FrozenPoint -> FrozenPoint -> FrozenPoint -> Curve
 curveSegment (Point xa ya) (Point xb yb) (Point xc yc) (Point xd yd) = bezier3 xa ya xb yb xc yc xd yd
 
--- lineSegment :: Point' Double -> Point' Double -> Curve
--- lineSegment (Point xa ya) (Point xb yb) = line xa ya xb yb
+lineSegment :: Point' Double -> Point' Double -> Curve
+lineSegment (Point xa ya) (Point xb yb) = line xa ya xb yb
 
 -- | Convert a Path into a Curve
 toBeziers' :: FrozenPoint -> [Frozen Segment] -> [Curve]

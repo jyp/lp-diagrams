@@ -20,7 +20,7 @@ graph :: (Monad m,PrintDotRepr g n, ParseDot n, PrintDot n) => (String -> lab) -
 graph labFct cmd gr = graphToDiagram labFct $ layout cmd gr
 
 layout :: (PrintDotRepr g n, ParseDot n, PrintDot n) => GraphvizCommand -> g n -> Gen.DotGraph n
-layout command input = parseIt' $ unsafePerformIO $ graphvizWithHandle command input DotOutput hGetStrict 
+layout command input = parseIt' $ unsafePerformIO $ graphvizWithHandle command input DotOutput hGetStrict
 
 pos (Pos p) = Just p
 pos _= Nothing
@@ -49,8 +49,11 @@ readAttr' f as k1 k2 = case [x | Just x <- map f as] of
   _ -> k2
 
 
+pt' :: G.Point -> Point' Double
 pt' (G.Point x y _z _forced) = D.Point x y
-pt = unfreeze . pt'
+
+pt :: G.Point -> Point' Expr
+pt = fmap constant . pt'
 
 diaSpline :: [FrozenPoint] -> [Graphics.Typography.Geometry.Bezier.Curve]
 diaSpline (w:x:y:z:rest) = curveSegment w x y z:diaSpline (z:rest)
@@ -71,7 +74,7 @@ graphToDiagram labFct (Gen.DotGraph _strict _directed _grIdent stmts) = do
       -- diaRaw $ tex $ "%Edge: " ++ show attrs ++ "\n"
       let toTip = readAttr' arrowHeadA attrs (tipTop ToTip) ToTip
       readAttr labelA attrs $ \(StrLabel l) ->
-        readAttr lpos attrs $ \p -> 
+        readAttr lpos attrs $ \p ->
         renderLab l p
       readAttr pos attrs $ \(SplinePos splines) ->
         forM_ splines $ \Spline{..} -> do
@@ -106,5 +109,3 @@ graphToDiagram labFct (Gen.DotGraph _strict _directed _grIdent stmts) = do
 
 
 inch x = 72 * x
-
-
