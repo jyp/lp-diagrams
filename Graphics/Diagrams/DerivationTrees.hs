@@ -22,7 +22,7 @@ derivationTreeDiag, delayD
 import Control.Monad.Writer
 import Data.LabeledTree
 import Data.Monoid
-import Graphics.Diagrams as D
+import Graphics.Diagrams as D hiding (label)
 import qualified Data.Tree as T
 import Algebra.Classes
 import Prelude hiding (Num(..))
@@ -91,7 +91,7 @@ derivationTreeDiag d = do
   minimize $ 10 *- (rightMost - leftMost)
   n # Center .=. zero
 
-toDiagPart :: Monad m => Expr -> Premise lab -> Diagram lab m (T.Tree (Point,Anchorage,Point))
+toDiagPart :: Monad m => Expr -> Premise lab -> Diagram lab m (T.Tree (Point,Object,Point))
 toDiagPart layerHeight (Link{..} ::> rul)
   | steps == 0 = toDiagram layerHeight rul
   | otherwise = do
@@ -114,7 +114,7 @@ toDiagPart layerHeight (Link{..} ::> rul)
 -- - Returns an object encompassing the group, with a the baseline set correctly.
 -- - Returns the average distance between the objects
 
-chainBases :: Monad m => Expr -> [Anchorage] -> Diagram lab m (Anchorage,Expr)
+chainBases :: Monad m => Expr -> [Object] -> Diagram lab m (Object,Expr)
 chainBases _ [] = do
   o <- box
   return (o,zero)
@@ -132,7 +132,7 @@ chainBases spacing ls = do
 
 -- | Put object in a box of the same vertical extent, and baseline,
 -- but whose height can be bigger.
-relaxHeight :: (Monad m, Anchored a) => a -> Diagram lab m Anchorage
+relaxHeight :: (Monad m) => Object -> Diagram lab m Object
 relaxHeight o = do
   b <- box
   -- using (outline "green")$ traceBounds o
@@ -142,12 +142,12 @@ relaxHeight o = do
   o `fitsVerticallyIn` b
   return b
 
-toDiagram :: Monad m => Expr -> Derivation lab -> Diagram lab m (T.Tree (Point,Anchorage,Point))
+toDiagram :: Monad m => Expr -> Derivation lab -> Diagram lab m (T.Tree (Point,Object,Point))
 toDiagram layerHeight (Node Rule{..} premises) = do
   ps <- mapM (toDiagPart layerHeight) premises
-  concl <- relaxHeight =<< extend (constant 1.5) <$> labelBox conclusion
+  concl <- relaxHeight =<< extend (constant 1.5) <$> rawLabel conclusion
   -- using (outline "red")$ traceBounds concl
-  lab <- labelBox ruleLabel
+  lab <- rawLabel ruleLabel
 
   -- Grouping
   (psGrp,premisesDist) <- chainBases (constant 10) [p | T.Node (_,p,_) _ <- ps]

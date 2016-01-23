@@ -98,13 +98,13 @@ graphToDiagram labFct (Gen.DotGraph _strict _directed _grIdent stmts) = do
          readAttr shapeA attrs $ \s ->
           case s of
             Circle -> do
-              draw $ path $ circle (pt p) (constant $ inch (w/2))
+              draw $ path $ circlePath (pt p) (constant $ inch (w/2))
             _ -> return ()
     _ -> return ()
   where
   renderLab :: T.Text -> G.Point -> Diagram l m ()
   renderLab l p = do
-    l' <- labelObj $ labFct $ T.unpack $ l
+    l' <- rawLabel $ labFct $ T.unpack $ l
     l' # D.Center .=. pt p
 
 

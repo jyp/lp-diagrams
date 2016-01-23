@@ -74,7 +74,7 @@ revBeziers = reverse . map rev
   where rev (Bezier cx cy t0 t1) = (Bezier (revBernstein cx) (revBernstein cy) (1-t1) (1-t0))
         revBernstein (Bernsteinp n c) = Bernsteinp n (V.reverse c)
 
-cutBefore' path area = revBeziers $ cutAfter' (revBeziers path) area
+cutBefore' pth area = revBeziers $ cutAfter' (revBeziers pth) area
 
 onBeziers :: ([Curve] -> [Curve] -> [Curve])
              -> FrozenPath -> FrozenPath -> FrozenPath
@@ -103,13 +103,14 @@ polygon (x:xs) = Path x (map StraightTo xs ++ [Cycle])
 
 
 -- | Circle approximated with 4 cubic bezier curves
-circle :: Point -> Expr -> Path
-circle center r =      Path (pt r zero)
-                         [CurveTo (pt r k) (pt k r) (pt zero r),
-                          CurveTo (pt (negate k) r) (pt (negate r) k) (pt (negate r) zero),
-                          CurveTo (pt (negate r) (negate k)) (pt (negate k) (negate r)) (pt zero (negate r)),
-                          CurveTo (pt k (negate r)) (pt r (negate k)) (pt r zero),
-                          Cycle]
+circlePath :: Point -> Expr -> Path
+circlePath center r =
+  Path (pt r zero)
+  [CurveTo (pt r k) (pt k r) (pt zero r),
+   CurveTo (pt (negate k) r) (pt (negate r) k) (pt (negate r) zero),
+   CurveTo (pt (negate r) (negate k)) (pt (negate k) (negate r)) (pt zero (negate r)),
+   CurveTo (pt k (negate r)) (pt r (negate k)) (pt r zero),
+   Cycle]
  where k1 :: Constant
        k1 = 4 * (sqrt 2 - 1) / 3
        k = k1 *^ r
@@ -133,6 +134,9 @@ stroke color = using (outline color)
 
 draw :: Monad m => Diagram lab m a -> Diagram lab m a
 draw = stroke "black"
+
+noDraw :: Monad m => Diagram lab m a -> Diagram lab m a
+noDraw = using (set drawColor Nothing . set fillColor Nothing)
 
 noOutline :: PathOptions -> PathOptions
 noOutline = set drawColor Nothing

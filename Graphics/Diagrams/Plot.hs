@@ -20,8 +20,8 @@ axisGen origin target anch labels = do
   draw {- using (set endTip ToTip) -} $ path $ polyline [origin,target]
   when (not $ null $ labels) $ do
     forM_ labels $ \(p,txt) -> do
-      l0 <- labelObj txt
-      let l = extend (constant 3) (anchors l0)
+      l0 <- label txt
+      let l = extend (constant 3) l0
       draw $ path $ polyline [l0 # anch, l # anch]
       l # anch .=. Point (lint p (xpart origin) (xpart target))
                          (lint p (ypart origin) (ypart target))
@@ -56,11 +56,11 @@ lint p origin target = (p*-(target-origin)) + origin
 -- Input data in the [0,1] interval fits the box.
 scatterPlot :: Monad m => PlotCanvas a -> [Vec2 a] -> Diagram lab m ()
 scatterPlot (bx,xform) input = forM_ (map (forward <$> xform <*>) input) $ \z -> do
-  pt <- using (fill "black") $ circleShape
+  pt <- using (fill "black") $ circle
   width pt === constant 3
   pt # Center .=. interpBox bx z
 
-interpBox :: forall a. Anchored a => a -> Point' Constant -> Point' Expr
+interpBox :: Object -> Point' Constant -> Point' Expr
 interpBox bx z = lint <$> z <*> bx#SW <*> bx#NE
 
 -- | @functionPlot c n f@.
@@ -114,7 +114,7 @@ type PlotCanvas a = (Box, Vec2 (Transform a))
 
 preparePlot :: Monad m => Vec2 (ShowFct lab a) -> Vec2 (Transform a) -> Vec2 a -> Vec2 a -> Diagram lab m (PlotCanvas a)
 preparePlot showFct axesXform lo hi = do
-  bx <- rectangleShape =<< box
+  bx <- box
   axes bx marks
   return (bx,xform)
   where marks = mkSteps <$> xform <*> showFct <*> marks0
