@@ -171,7 +171,7 @@ traceBox c l = do
 -- use 'label' instead.
 rawLabel :: Monad m => lab -> Diagram lab m Object
 rawLabel t = do
-  l <- box
+  l <- noDraw box
   -- traceAnchorage "red" l
   BoxSpec wid h desc <- drawText (l # NW) t
 
