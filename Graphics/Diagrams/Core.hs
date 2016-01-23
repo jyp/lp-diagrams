@@ -187,20 +187,17 @@ instance Monad m => MonadState LPState (Diagram lab m) where
 -- Diagrams
 
 
+-- | Relax the optimisation functions by the given factor
 relax :: Monad m => Constant -> Diagram lab m a -> Diagram lab m a
 relax factor = tighten (1/factor)
 
+-- | Tighten the optimisation functions by the given factor
 tighten :: Monad m => Constant -> Diagram lab m a -> Diagram lab m a
 tighten factor = local (over diaTightness (* factor))
 
 --------------
 -- Variables
 
-rawNewVar :: Monad m => Diagram lab m Var
-rawNewVar = Dia $ do
-      (Var x,y) <- get
-      put $ (Var (x+1),y)
-      return $ Var x
 
 newVar :: Monad m => Diagram lab m Expr
 newVar = do
@@ -216,6 +213,12 @@ newVars' kinds = forM kinds $ \(k,b) -> do
   setVarKind v k
   setVarBounds v b
   return $ variable v
+ where rawNewVar :: Monad m => Diagram lab m Var
+       rawNewVar = Dia $ do
+         (Var x,y) <- get
+         put $ (Var (x+1),y)
+         return $ Var x
+
 
 infix 4 <==,===,>==
 
@@ -233,14 +236,17 @@ runDiagram backend (Dia diag) = do
   forM_ ds (\(Freeze f x) -> f (fmap (valueIn solution) x))
   return a
 
-
+-- | Value of an expression in the given solution
 valueIn :: Solution -> Expr -> Double
 valueIn sol (LinExpr m c) = sum (c:[scale * varValue v | (v,scale) <- M.assocs m])
  where varValue v = M.findWithDefault 0 v sol
 
+
+-- | Embed a variable in an expression
 variable :: Var -> Expr
 variable v = LinExpr (M.singleton v 1) 0
 
+-- | Embed a constant in an expression
 constant :: Constant -> Expr
 constant c = LinExpr M.empty c
 
@@ -248,6 +254,7 @@ constant c = LinExpr M.empty c
 (*-) = (*^)
 infixr 6 *-
 
+-- | Average
 avg :: Module Constant a => [a] -> a
 avg xs = (1/fromIntegral (length xs)) *- add xs
 
@@ -293,7 +300,7 @@ x =~= y = minimize =<< absoluteValue (x-y)
 minimize,maximize :: Monad m => Expr -> Diagram lab m ()
 minimize (LinExpr x _) = do
   tightness <- view diaTightness
-  addObjective (tightness *- x)
+  addObjective (tightness *^ x)
 maximize = minimize . negate
 
 
