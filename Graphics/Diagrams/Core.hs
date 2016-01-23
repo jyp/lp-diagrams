@@ -252,7 +252,7 @@ constant c = LinExpr M.empty c
 
 (*-) :: Module Constant a => Constant -> a -> a
 (*-) = (*^)
-infixr 6 *-
+infixr 7 *-
 
 -- | Average
 avg :: Module Constant a => [a] -> a
