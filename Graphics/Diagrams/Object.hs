@@ -234,10 +234,11 @@ autoLabelObj lab (OVector pt norm) = do
 
 -- | @autoLabel o i@ Layouts the label object @o@ at the given incidence
 -- vector.
-autoLabel :: Monad m => String -> lab -> OVector -> Diagram lab m ()
+autoLabel :: Monad m => String -> lab -> OVector -> Diagram lab m Object
 autoLabel name lab i = do
   o <- label name lab
   autoLabelObj o i
+  return o
 
 -- | @labeledEdge label source target@
 labeledEdge :: Monad m => Object -> Object -> Box -> Diagram lab m ()
@@ -284,3 +285,8 @@ boundingBox os = do
   bx <- box $ "boundingBox" ++ (show $ map objectName os)
   mapM_ (`fitsIn` bx) os
   return bx
+
+noOverlap :: Monad m => Object -> Diagram lab m Object
+noOverlap o = do
+  registerNonOverlap (o#SW) (o#NE)
+  return o

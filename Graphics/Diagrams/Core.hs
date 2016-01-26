@@ -1,4 +1,4 @@
-{-# LANGUAGE TypeSynonymInstances, FlexibleContexts, FlexibleInstances, GeneralizedNewtypeDeriving, MultiParamTypeClasses, RecursiveDo, TypeFamilies, OverloadedStrings, RecordWildCards,UndecidableInstances, PackageImports, TemplateHaskell, RankNTypes, GADTs, ImpredicativeTypes, DeriveFunctor #-}
+{-# LANGUAGE TypeSynonymInstances, FlexibleContexts, FlexibleInstances, GeneralizedNewtypeDeriving, MultiParamTypeClasses, RecursiveDo, TypeFamilies, OverloadedStrings, RecordWildCards,UndecidableInstances, PackageImports, TemplateHaskell, RankNTypes, GADTs, ImpredicativeTypes, DeriveFunctor, ScopedTypeVariables #-}
 
 module Graphics.Diagrams.Core (module Graphics.Diagrams.Core) where
 import Control.Monad.LPMonad
@@ -167,15 +167,22 @@ defaultPathOptions = PathOptions
 data Freeze m where
   Freeze :: forall t m. Functor t => (t Constant -> m ()) -> t Expr -> Freeze m
 
+data Pair a = Pair a a
+  deriving (Functor)
+
+instance Show a => Show (Pair a) where
+  show (Pair x y) = show (x,y)
+
 data DiagramState = DiagramState
   {_diaNextVar :: Var
   ,_diaLPState :: LPState
   ,_diaVarNames :: Map Var String
+  ,_diaNoOverlaps :: [Pair (Point' Expr)]
   }
 
 $(makeLenses ''DiagramState)
 
-newtype Diagram lab m a = Dia (RWST (Env lab m) [Freeze m] DiagramState m a)
+newtype Diagram lab m a = Dia {fromDia :: (RWST (Env lab m) [Freeze m] DiagramState m a)}
   deriving (Monad, Applicative, Functor, MonadReader (Env lab m), MonadWriter [Freeze m])
 
 -- | @freeze x f@ performs @f@ on the frozen value of @x@.
@@ -231,14 +238,21 @@ infix 4 <==,===,>==
 
 runDiagram :: Monad m => Backend lab m -> Diagram lab m a -> m a
 runDiagram backend (Dia diag) = do
-  (a,finalState,ds) <- runRWST diag (Env 1 defaultPathOptions backend) $
-    DiagramState (Var 0) (LP Min M.empty [] M.empty M.empty) (M.empty)
-  let problem = finalState ^. diaLPState
-      solution = case unsafePerformIO $ glpSolveVars simplexDefaults problem of
+  let env = Env 1 defaultPathOptions backend
+  (a,finalState,ds) <- runRWST diag env $
+    DiagramState (Var 0) (LP Min M.empty [] M.empty M.empty) (M.empty) []
+  let problem0 = finalState ^. diaLPState
+      solution0 = case unsafePerformIO $ glpSolveVars simplexDefaults problem0 of
+        (_retcode,Just (_objFunc,s)) -> s
+        (retcode,Nothing) -> error $ "LP failed ret code = " ++ show retcode
+  (ovlDbg,finalState',_) <- runRWST (fromDia $ resolveNonOverlaps solution0) env finalState
+  let problem1 = finalState' ^. diaLPState
+      solution1 = case unsafePerformIO $ ({-putStrLn "ovlDbg: " >> print ovlDbg >> -}
+        glpSolveVars simplexDefaults problem1) of
         (_retcode,Just (_objFunc,s)) -> s
         (retcode,Nothing) -> error $ "LP failed ret code = " ++ show retcode
   -- Raw Normal $ "%problem solved: " ++ show problem ++ "\n"
-  forM_ ds (\(Freeze f x) -> f (fmap (valueIn solution) x))
+  forM_ ds (\(Freeze f x) -> f (fmap (valueIn solution1) x))
   return a
 
 -- | Value of an expression in the given solution
@@ -295,12 +309,12 @@ e1 <== e2 = do
 
 
 prettyExpr :: Monad m => Expr -> Diagram lab m String
-prettyExpr (LinExpr f c) = do
+prettyExpr (LinExpr f k) = do
   vnames <- Dia (use diaVarNames)
   let vname n = case M.lookup n vnames of
         Nothing -> error ("prettyExpr: variable not found: " ++ show n)
         Just nm -> nm
-  return $ prettySum ([prettyProd c (vname v) | (v,c) <- M.assocs f]  ++ [show c | c /= 0])
+  return $ prettySum ([prettyProd c (vname v) | (v,c) <- M.assocs f]  ++ [show k | k /= 0])
   where prettySum [] = "0"
         prettySum xs = foldr1 prettyPlus xs
         prettyPlus a ('-':b) = a ++ ('-':b)
@@ -339,3 +353,30 @@ drawText point lab = do
 
 diaRaw :: Monad m => m a -> Diagram lab m a
 diaRaw = Dia . lift
+
+--------------------------
+-- Non-overlapping things
+
+registerNonOverlap :: Monad m => Point' Expr -> Point' Expr -> Diagram lab m ()
+registerNonOverlap nw se = Dia $ diaNoOverlaps %= (Pair nw se:)
+
+
+-- resolveNonOverlaps :: Monad m => Solution -> Diagram lab m Bool
+resolveNonOverlaps s = do
+  noOvl <- Dia $ use diaNoOverlaps
+  forM_ (allPairs noOvl) (\(pair :: Pair (Pair (Point' Expr))) -> do
+    let frozenPair@(Pair bx1@(Pair nw1 _) bx2@(Pair nw2 _)) = fmap (fmap (fmap (valueIn s))) pair
+        overlap = inters bx1 bx2
+        doSomething = nonEmpty overlap
+    when doSomething $ do
+        let part :: forall a. Point' a -> a
+            part = (if xpart overlap > ypart overlap then ypart else xpart)
+            Pair (Pair _ p1) (Pair p2 _) = (if part nw1 < part nw2 then id else flipPair) pair
+        part p1 <== part p2
+    return ())
+  where
+    allPairs [] = []
+    allPairs (x:xs) = [Pair x y | y <- xs] ++ allPairs xs
+    inters (Pair p1 q1) (Pair p2 q2) = (max <$> q1 <*> q2) - (min <$> p1 <*> p2)
+    nonEmpty (Point a b) = a > 0 && b > 0
+    flipPair (Pair a b) = Pair b a
