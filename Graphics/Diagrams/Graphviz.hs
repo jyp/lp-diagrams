@@ -104,7 +104,7 @@ graphToDiagram labFct (Gen.DotGraph _strict _directed _grIdent stmts) = do
   where
   renderLab :: T.Text -> G.Point -> Diagram l m ()
   renderLab l p = do
-    l' <- rawLabel $ labFct $ T.unpack $ l
+    l' <- rawLabel "graphVizLab" $ labFct $ T.unpack $ l
     l' # D.Center .=. pt p
 
 
