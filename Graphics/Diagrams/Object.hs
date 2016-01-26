@@ -88,7 +88,7 @@ point name = do
 box :: Monad m => String -> Diagram lab m Object
 box name = do
   [n,s,e,w,base,midx,midy] <- newVars $
-     zip (map (\suff -> name++"."++suff) ["north","south","west","base","midx","midy"]) (repeat ContVar)
+     zip (map (\suff -> name++"."++suff) ["north","south","east","west","base","midx","midy"]) (repeat ContVar)
   n >== base
   base >== s
   w <== e
