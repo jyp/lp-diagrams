@@ -1,4 +1,4 @@
-{-# LANGUAGE TypeSynonymInstances, FlexibleContexts, FlexibleInstances, GeneralizedNewtypeDeriving, MultiParamTypeClasses, RecursiveDo, TypeFamilies, OverloadedStrings, RecordWildCards,UndecidableInstances, PackageImports, TemplateHaskell, RankNTypes, GADTs, ImpredicativeTypes #-}
+{-# LANGUAGE TypeSynonymInstances, FlexibleContexts, FlexibleInstances, GeneralizedNewtypeDeriving, MultiParamTypeClasses, RecursiveDo, TypeFamilies, OverloadedStrings, RecordWildCards,UndecidableInstances, PackageImports, TemplateHaskell, RankNTypes, GADTs, ImpredicativeTypes, DeriveFunctor #-}
 
 module Graphics.Diagrams.Core (module Graphics.Diagrams.Core) where
 import Control.Monad.LPMonad
@@ -26,16 +26,13 @@ type Constant = Double
 type Expr = LinExpr Var Constant
 
 data Point' a = Point {xpart :: a, ypart :: a}
-  deriving (Eq,Show)
+  deriving (Eq,Show,Functor)
 
 instance Traversable Point' where
   traverse f (Point x y) = Point <$> f x <*> f y
 
 instance Foldable Point' where
   foldMap = foldMapDefault
-
-instance Functor Point' where
-  fmap = fmapDefault
 
 instance Applicative Point' where
   pure x = Point x x
@@ -170,7 +167,7 @@ defaultPathOptions = PathOptions
 data Freeze m where
   Freeze :: forall t m. Functor t => (t Constant -> m ()) -> t Expr -> Freeze m
 
-newtype Diagram lab m a = Dia (RWST (Env lab m) [Freeze m] (Var,LPState) m a)
+newtype Diagram lab m a = Dia (RWST (Env lab m) [Freeze m] (Var,LPState,Map Var String) m a)
   deriving (Monad, Applicative, Functor, MonadReader (Env lab m), MonadWriter [Freeze m])
 
 -- | @freeze x f@ performs @f@ on the frozen value of @x@.
@@ -178,10 +175,12 @@ freeze :: (Functor t, Monad m) => t Expr -> (t Constant -> m ()) -> Diagram lab 
 freeze x f = tell [Freeze (\y -> (f y)) x]
 
 instance Monad m => MonadState LPState (Diagram lab m) where
-  get = Dia $ snd <$> get
+  get = Dia $ do
+    (_,y,_) <- get
+    return y
   put y = Dia $ do
-    (x,_) <- get
-    put (x,y)
+    (x,_,z) <- get
+    put (x,y,z)
 
 -------------
 -- Diagrams
@@ -199,24 +198,24 @@ tighten factor = local (over diaTightness (* factor))
 -- Variables
 
 
-newVar :: Monad m => Diagram lab m Expr
-newVar = do
-  [v] <- newVars [ContVar]
+newVar :: Monad m => String -> Diagram lab m Expr
+newVar name = do
+  [v] <- newVars [(name,ContVar)]
   return v
 
-newVars :: Monad m => [VarKind] -> Diagram lab m [Expr]
+newVars :: Monad m => [(String,VarKind)] -> Diagram lab m [Expr]
 newVars kinds = newVars' (zip kinds (repeat Free))
 
-newVars' :: Monad m => [(VarKind,Bounds Constant)] -> Diagram lab m [Expr]
-newVars' kinds = forM kinds $ \(k,b) -> do
-  v <- rawNewVar
+newVars' :: Monad m => [((String,VarKind),Bounds Constant)] -> Diagram lab m [Expr]
+newVars' kinds = forM kinds $ \((name,k),b) -> do
+  v <- rawNewVar name
   setVarKind v k
   setVarBounds v b
   return $ variable v
- where rawNewVar :: Monad m => Diagram lab m Var
-       rawNewVar = Dia $ do
-         (Var x,y) <- get
-         put $ (Var (x+1),y)
+ where rawNewVar :: Monad m => String -> Diagram lab m Var
+       rawNewVar name = Dia $ do
+         (Var x,y,z) <- get
+         put $ (Var (x+1),y,M.insert (Var x) name z)
          return $ Var x
 
 
@@ -227,8 +226,8 @@ infix 4 <==,===,>==
 
 runDiagram :: Monad m => Backend lab m -> Diagram lab m a -> m a
 runDiagram backend (Dia diag) = do
-  (a,(_,problem),ds) <- runRWST diag (Env 1 defaultPathOptions backend)
-                                        (Var 0,LP Min M.empty [] M.empty M.empty)
+  (a,(_,problem,_),ds) <- runRWST diag (Env 1 defaultPathOptions backend)
+                                        (Var 0,LP Min M.empty [] M.empty M.empty,M.empty)
   let solution = case unsafePerformIO $ glpSolveVars simplexDefaults problem of
         (_retcode,Just (_objFunc,s)) -> s
         (retcode,Nothing) -> error $ "LP failed ret code = " ++ show retcode
@@ -262,33 +261,56 @@ avg xs = (1/fromIntegral (length xs)) *- add xs
 -- the other way around).
 absoluteValue :: Monad m => Expr -> Diagram lab m Expr
 absoluteValue x = do
-  [t1,t2] <- newVars' [(ContVar,LBound 0),(ContVar,LBound 0)]
+  [t1,t2] <- newVars' [((("absoluteStack1",ContVar),LBound 0)),(("absoluteStack2",ContVar),LBound 0)]
   t1 - t2 === x
   return $ t1 + t2
 
-satAll :: Monad m => (Expr -> a -> Diagram lab m b) -> [a] -> Diagram lab m Expr
-satAll p xs = do
-  [m] <- newVars [ContVar]
+satAll :: Monad m => String -> (Expr -> a -> Diagram lab m b) -> [a] -> Diagram lab m Expr
+satAll name p xs = do
+  [m] <- newVars [(name,ContVar)]
   mapM_ (p m) xs
   return m
 
 -- | Minimum or maximum of a list of expressions.
 maximVar, minimVar :: Monad m => [Expr] -> Diagram lab m Expr
-maximVar = satAll (>==)
-minimVar = satAll (<==)
+maximVar = satAll "maximum of" (>==)
+minimVar = satAll "minimum of" (<==)
 
 --------------
 -- Expression constraints
 (===), (>==), (<==) :: Expr -> Expr -> Monad m => Diagram lab m ()
 e1 <== e2 = do
   let LinExpr f c = e1 - e2
-  leqTo f (negate c)
+      isFalse = M.null f && c < 0
+  when isFalse $ error "Diagrams.Core: inconsistent constraint!"
+  constrName <- (\x y -> x ++ "<= " ++ y) <$> prettyExpr e1 <*> prettyExpr e2
+  leqTo' constrName f (negate c)
+
+
+
+prettyExpr :: Monad m => Expr -> Diagram lab m String
+prettyExpr (LinExpr f c) = do
+  (_,_,vnames) <- Dia get
+  let vname n = case M.lookup n vnames of
+        Nothing -> error ("prettyExpr: variable not found: " ++ show n)
+        Just nm -> nm
+  return $ prettySum ([prettyProd c (vname v) | (v,c) <- M.assocs f]  ++ [show c | c /= 0])
+  where prettySum [] = "0"
+        prettySum xs = foldr1 prettyPlus xs
+        prettyPlus a ('-':b) = a ++ ('-':b)
+        prettyPlus x y = x ++ "+" ++ y
+        prettyProd 1 v = show v
+        prettyProd (-1) v = '-' : show v
+        prettyProd c v = show c ++ show v
 
 (>==) = flip (<==)
 
 e1 === e2 = do
   let LinExpr f c = e1 - e2
-  equalTo f (negate c)
+      isFalse = M.null f && c /= 0
+  when isFalse $ error "Diagrams.Core: inconsistent constraint!"
+  constrName <- (\x y -> x ++ " = " ++ y) <$> prettyExpr e1 <*> prettyExpr e2
+  equalTo' constrName f (negate c)
 
 -- | minimize the distance between expressions
 (=~=) :: Monad m => Expr -> Expr -> Diagram lab m ()

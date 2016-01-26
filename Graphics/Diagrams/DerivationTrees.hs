@@ -71,7 +71,7 @@ delayD (Node r ps0) = Node r (map delayP ps)
 
 derivationTreeDiag :: Monad m => Derivation lab -> Diagram lab m ()
 derivationTreeDiag d = do
-  [h] <- newVars [ContVar] -- the height of a layer in the tree.
+  [h] <- newVars [("height",ContVar)] -- the height of a layer in the tree.
   minimize h
   h >== constant 1
   tree@(T.Node (_,n,_) _) <- toDiagram h d
@@ -83,7 +83,7 @@ derivationTreeDiag d = do
   let leftFringe = map head nonNilLevs
       rightFringe = map last nonNilLevs
       nonNilLevs = filter (not . null) $ T.levels tree
-  [leftMost,rightMost] <- newVars [ContVar,ContVar]
+  [leftMost,rightMost] <- newVars [("leftMost",ContVar),("rightMost",ContVar)]
   forM_ leftFringe $ \(p,_,_) ->
     leftMost <== xpart p
   forM_ rightFringe $ \(_,_,p) ->
@@ -96,7 +96,7 @@ toDiagPart layerHeight (Link{..} ::> rul)
   | steps == 0 = toDiagram layerHeight rul
   | otherwise = do
     above@(T.Node (_,concl,_) _) <- toDiagram layerHeight rul
-    ptObj <- vrule
+    ptObj <- vrule "ptObj"
     let pt = ptObj # S
     pt `eastOf` (concl # W)
     pt `westOf` (concl # E)
@@ -116,10 +116,10 @@ toDiagPart layerHeight (Link{..} ::> rul)
 
 chainBases :: Monad m => Expr -> [Object] -> Diagram lab m (Object,Expr)
 chainBases _ [] = do
-  o <- box
+  o <- box "empty"
   return (o,zero)
 chainBases spacing ls = do
-  grp <- box
+  grp <- box "grp"
   forM_ [Base,N,S] $ \ anch -> do
     D.align ypart $ map (# anch) (grp:ls)
   dxs <- forM (zip ls (tail ls)) $ \(x,y) -> do
@@ -134,7 +134,7 @@ chainBases spacing ls = do
 -- but whose height can be bigger.
 relaxHeight :: (Monad m) => Object -> Diagram lab m Object
 relaxHeight o = do
-  b <- box
+  b <- box "relaxed"
   -- using (outline "green")$ traceBounds o
   D.align xpart [b#W,o#W]
   D.align xpart [b#E,o#E]
@@ -145,17 +145,17 @@ relaxHeight o = do
 toDiagram :: Monad m => Expr -> Derivation lab -> Diagram lab m (T.Tree (Point,Object,Point))
 toDiagram layerHeight (Node Rule{..} premises) = do
   ps <- mapM (toDiagPart layerHeight) premises
-  concl <- relaxHeight =<< extend (constant 1.5) <$> rawLabel conclusion
+  concl <- relaxHeight =<< extend (constant 1.5) <$> rawLabel "concl" conclusion
   -- using (outline "red")$ traceBounds concl
-  lab <- rawLabel ruleLabel
+  lab <- rawLabel "rulename" ruleLabel
 
   -- Grouping
   (psGrp,premisesDist) <- chainBases (constant 10) [p | T.Node (_,p,_) _ <- ps]
   -- using (outline "blue" . denselyDotted) $ traceBounds psGrp
   height psGrp === layerHeight
 
-  -- Sepaartion rule
-  separ <- hrule
+  -- Separation rule
+  separ <- hrule "separation"
   separ # N .=. psGrp # S
   align ypart [concl # N,separ # S]
   minimize $ width separ

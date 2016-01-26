@@ -17,7 +17,7 @@ data Anchor = Center | N | NW | W | SW | S | SE | E | NE | BaseW | Base | BaseE
 type Box = Object
 
 type Anchorage = Anchor -> Point
-data Object = Object {objectOutline :: Path, anchors :: Anchorage}
+data Object = Object {objectName :: String, objectOutline :: Path, anchors :: Anchorage}
 
 
 infix 8 #
@@ -55,37 +55,40 @@ shiftInDir _ _  = zero `Point` zero
 -- | Make a label object. This is the text surrounded by 4
 -- points of blank and a rectangle outline.
 
-label :: Monad m => lab -> Diagram lab m Box
-label txt = do
-  l <- extend (constant 4) <$> rawLabel txt
-  pathObject $ Object (polygon (map (l #) [NW,NE,SE,SW]))
-                      (anchors l)
+label :: Monad m => String -> lab -> Diagram lab m Box
+label name txt = do
+  l <- extend (constant 4) <$> rawLabel name txt
+  pathObject $ Object
+    name
+    (polygon (map (l #) [NW,NE,SE,SW]))
+    (anchors l)
 
 -- | Internal use.
 pathObject :: Monad m => Object -> Diagram lab m Object
-pathObject o@(Object p _) = path p >> return o
+pathObject o@(Object _ p _) = path p >> return o
 
 -- | Label a point by a given TeX expression, at the given anchor.
-labelAt :: Monad m => lab -> Anchor -> Point -> Diagram lab m Box
-labelAt labell anchor labeled  = do
-  t <- label labell
+labelAt :: Monad m => String -> lab -> Anchor -> Point -> Diagram lab m Box
+labelAt name labell anchor labeled  = do
+  t <- label name labell
   t # anchor .=. labeled
   return t
 
 -- | A free point
-point :: Monad m => Diagram lab m Object
-point = do
-  [x,y] <- newVars (replicate 2 ContVar)
-  return $ Object EmptyPath (\_ -> Point x y)
+point :: Monad m => String -> Diagram lab m Object
+point name = do
+  [x,y] <- newVars [(name++".x",ContVar),(name++".y",ContVar)]
+  return $ Object name EmptyPath (\_ -> Point x y)
 
--- | A point anchorage (similar to a box of zero width and height)
-pointBox :: Monad m => Diagram lab m Object
-pointBox = point
+-- -- | A free point
+-- point' :: Monad m => Diagram lab m Object
+-- point' = point "point"
 
 -- | A box. Anchors are aligned along a grid.
-box :: Monad m => Diagram lab m Object
-box = do
-  [n,s,e,w,base,midx,midy] <- newVars (replicate 7 ContVar)
+box :: Monad m => String -> Diagram lab m Object
+box name = do
+  [n,s,e,w,base,midx,midy] <- newVars $
+     zip (map (\suff -> name++"."++suff) ["north","south","west","base","midx","midy"]) (repeat ContVar)
   n >== base
   base >== s
   w <== e
@@ -109,18 +112,17 @@ box = do
       objectOutline = polygon (map anchors [NW,NE,SE,SW])
   pathObject $ Object{..}
 
-
 -- | A box of zero width
-vrule :: Monad m => Diagram lab m Object
-vrule = do
-  o <- box
+vrule :: Monad m => String -> Diagram lab m Object
+vrule name = do
+  o <- box name
   align xpart [o # W, o #Center, o#E]
   return o
 
 -- | A box of zero height
-hrule :: Monad m => Diagram lab m Object
-hrule = do
-  o <- box
+hrule :: Monad m => String -> Diagram lab m Object
+hrule name = do
+  o <- box name
   height o === zero
   return o
 
@@ -154,13 +156,13 @@ a `fitsIn` b = do
   a `fitsVerticallyIn` b
 
 -- | A circle
-circle :: Monad m => Diagram lab m Object
-circle = do
-  bx <- noDraw box
+circle :: Monad m => String -> Diagram lab m Object
+circle name = do
+  bx <- noDraw (box name)
   width bx === height bx
   let radius = 0.5 *- width bx
       p = circlePath (bx # Center) radius
-  pathObject $ Object p (anchors bx)
+  pathObject $ Object name p (anchors bx)
 
 traceBox :: (Monad m) => Color -> Object -> Diagram lab m ()
 traceBox c l = do
@@ -169,9 +171,9 @@ traceBox c l = do
 
 -- | Typeset a piece of text and return its bounding box as an object. Probably,
 -- use 'label' instead.
-rawLabel :: Monad m => lab -> Diagram lab m Object
-rawLabel t = do
-  l <- noDraw box
+rawLabel :: Monad m => String -> lab -> Diagram lab m Object
+rawLabel name t = do
+  l <- noDraw (box name)
   -- traceAnchorage "red" l
   BoxSpec wid h desc <- drawText (l # NW) t
 
@@ -232,9 +234,9 @@ autoLabelObj lab (OVector pt norm) = do
 
 -- | @autoLabel o i@ Layouts the label object @o@ at the given incidence
 -- vector.
-autoLabel :: Monad m => lab -> OVector -> Diagram lab m ()
-autoLabel lab i = do
-  o <- label lab
+autoLabel :: Monad m => String -> lab -> OVector -> Diagram lab m ()
+autoLabel name lab i = do
+  o <- label name lab
   autoLabelObj o i
 
 -- | @labeledEdge label source target@
@@ -263,10 +265,10 @@ spread f d (x:y:xs) = do
 spread _ _ _ = return ()
 
 -- | A node: a labeled circle
-node :: Monad m => lab -> Diagram lab m Object
-node lab = do
-  l <- noDraw $ label lab
-  c <- circle
+node :: Monad m => String -> lab -> Diagram lab m Object
+node name lab = do
+  l <- noDraw $ label name lab
+  c <- circle name
   l `fitsIn` c
   l # Center .=. c # Center
   return c
@@ -279,6 +281,6 @@ arrow src trg = using (outline "black" . set endTip LatexTip) $ do
 -- | Bounding box of a number of anchored values
 boundingBox :: (Monad m) => [Object] -> Diagram lab m Object
 boundingBox os = do
-  bx <- box
+  bx <- box $ "boundingBox" ++ (show $ map objectName os)
   mapM_ (`fitsIn` bx) os
   return bx
