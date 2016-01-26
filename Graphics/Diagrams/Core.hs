@@ -8,7 +8,7 @@ import Data.LinearProgram
 import Data.LinearProgram.Common as Graphics.Diagrams.Core (VarKind(..))
 import Data.LinearProgram.LinExpr
 import Data.Map (Map)
-import qualified Data.Map as M
+import qualified Data.Map.Strict as M
 import Control.Lens hiding (element)
 import Data.Traversable
 import Data.Foldable
@@ -167,7 +167,15 @@ defaultPathOptions = PathOptions
 data Freeze m where
   Freeze :: forall t m. Functor t => (t Constant -> m ()) -> t Expr -> Freeze m
 
-newtype Diagram lab m a = Dia (RWST (Env lab m) [Freeze m] (Var,LPState,Map Var String) m a)
+data DiagramState = DiagramState
+  {_diaNextVar :: Var
+  ,_diaLPState :: LPState
+  ,_diaVarNames :: Map Var String
+  }
+
+$(makeLenses ''DiagramState)
+
+newtype Diagram lab m a = Dia (RWST (Env lab m) [Freeze m] DiagramState m a)
   deriving (Monad, Applicative, Functor, MonadReader (Env lab m), MonadWriter [Freeze m])
 
 -- | @freeze x f@ performs @f@ on the frozen value of @x@.
@@ -175,12 +183,8 @@ freeze :: (Functor t, Monad m) => t Expr -> (t Constant -> m ()) -> Diagram lab 
 freeze x f = tell [Freeze (\y -> (f y)) x]
 
 instance Monad m => MonadState LPState (Diagram lab m) where
-  get = Dia $ do
-    (_,y,_) <- get
-    return y
-  put y = Dia $ do
-    (x,_,z) <- get
-    put (x,y,z)
+  get = Dia $ use diaLPState
+  put y = Dia $ diaLPState .= y
 
 -------------
 -- Diagrams
@@ -214,8 +218,9 @@ newVars' kinds = forM kinds $ \((name,k),b) -> do
   return $ variable v
  where rawNewVar :: Monad m => String -> Diagram lab m Var
        rawNewVar name = Dia $ do
-         (Var x,y,z) <- get
-         put $ (Var (x+1),y,M.insert (Var x) name z)
+         Var x <- use diaNextVar
+         diaNextVar .= Var (x+1)
+         diaVarNames %= M.insert (Var x) name
          return $ Var x
 
 
@@ -226,9 +231,10 @@ infix 4 <==,===,>==
 
 runDiagram :: Monad m => Backend lab m -> Diagram lab m a -> m a
 runDiagram backend (Dia diag) = do
-  (a,(_,problem,_),ds) <- runRWST diag (Env 1 defaultPathOptions backend)
-                                        (Var 0,LP Min M.empty [] M.empty M.empty,M.empty)
-  let solution = case unsafePerformIO $ glpSolveVars simplexDefaults problem of
+  (a,finalState,ds) <- runRWST diag (Env 1 defaultPathOptions backend) $
+    DiagramState (Var 0) (LP Min M.empty [] M.empty M.empty) (M.empty)
+  let problem = finalState ^. diaLPState
+      solution = case unsafePerformIO $ glpSolveVars simplexDefaults problem of
         (_retcode,Just (_objFunc,s)) -> s
         (retcode,Nothing) -> error $ "LP failed ret code = " ++ show retcode
   -- Raw Normal $ "%problem solved: " ++ show problem ++ "\n"
@@ -290,7 +296,7 @@ e1 <== e2 = do
 
 prettyExpr :: Monad m => Expr -> Diagram lab m String
 prettyExpr (LinExpr f c) = do
-  (_,_,vnames) <- Dia get
+  vnames <- Dia (use diaVarNames)
   let vname n = case M.lookup n vnames of
         Nothing -> error ("prettyExpr: variable not found: " ++ show n)
         Just nm -> nm
