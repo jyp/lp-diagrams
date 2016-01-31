@@ -1,29 +1,72 @@
 {-# LANGUAGE TypeSynonymInstances, FlexibleContexts, FlexibleInstances, GeneralizedNewtypeDeriving, MultiParamTypeClasses, RecursiveDo, TypeFamilies, OverloadedStrings, RecordWildCards,UndecidableInstances, PackageImports, TemplateHaskell, RankNTypes, GADTs, ImpredicativeTypes, DeriveFunctor, ScopedTypeVariables #-}
+{-# OPTIONS_GHC -fno-warn-orphans #-}
 
 module Graphics.Diagrams.Core (module Graphics.Diagrams.Core) where
-import Control.Monad.LPMonad
-import Prelude hiding (sum,mapM_,mapM,concatMap,Num(..),(/))
+import Prelude hiding (sum,mapM_,mapM,concatMap,Num(..),(/),fromRational,recip,(/))
+import qualified Prelude
 import Control.Monad.RWS hiding (forM,forM_,mapM_,mapM)
-import Data.LinearProgram
-import Data.LinearProgram.Common as Graphics.Diagrams.Core (VarKind(..))
-import Data.LinearProgram.LinExpr
+import Algebra.Classes
+import Algebra.Linear
+import Algebra.Linear.GaussianElimination
 import Data.Map (Map)
 import qualified Data.Map.Strict as M
 import Control.Lens hiding (element)
 import Data.Traversable
 import Data.Foldable
 import System.IO.Unsafe
+import Numeric.Optimization.Algorithms.HagerZhang05.AD
+import Data.Reflection (Reifies)
+import Numeric.AD.Internal.Reverse (Reverse,Tape)
 
-type LPState = LP Var Constant
+instance Reifies s Tape => Multiplicative (Reverse s Double) where
+  (*) = (Prelude.*)
+  one = 1
+instance Reifies s Tape => Group (Reverse s Double) where
+  negate = (Prelude.negate)
+  (-) = (Prelude.-)
+instance Reifies s Tape => Additive (Reverse s Double) where
+  (+) = (Prelude.+)
+  zero = 0
+instance Reifies s Tape => AbelianAdditive (Reverse s Double)
+instance Reifies s Tape => Ring (Reverse s Double) where
+  fromInteger = Prelude.fromInteger
+instance Reifies s Tape => Division (Reverse s Double) where
+  recip = Prelude.recip
+  (/) = (Prelude./)
+instance Reifies s Tape => Field (Reverse s Double)
+
+newtype Var = Var Int
+  deriving (Ord,Eq,Show,Enum)
 
 -- | Solution of the linear programming problem
 type Solution = Map Var Double
+
+-- | A non-linear expression. Fixme: replace expr
+type ProtoGExpr = forall r. (Field r,Ord r) => (Expr -> r) -> r
+newtype GExpr = GExpr {fromGExpr :: ProtoGExpr}
+
+
+instance Additive GExpr where
+  zero = GExpr $ \_ -> zero
+  GExpr x + GExpr y = GExpr $ \s -> x s + y s
+instance AbelianAdditive GExpr where
+instance Group GExpr where
+  negate (GExpr x) = GExpr $ \s -> negate (x s)
+  GExpr x - GExpr y = GExpr $ \s -> x s - y s
+instance Division GExpr where
+  recip (GExpr x) = GExpr $ \s -> recip (x s)
+  GExpr x / GExpr y = GExpr $ \s -> x s / y s
+instance Multiplicative GExpr where
+  one = GExpr $ \_ -> one
+  GExpr x * GExpr y = GExpr $ \s -> x s * y s
+instance Ring GExpr where
+instance Field GExpr where
 
 
 type Constant = Double
 
 -- | Expressions are linear functions of the variables
-type Expr = LinExpr Var Constant
+type Expr = LinFunc Var Constant
 
 data Point' a = Point {xpart :: a, ypart :: a}
   deriving (Eq,Show,Functor)
@@ -144,7 +187,7 @@ data Backend lab m =
 
 $(makeLenses ''Backend)
 
-data Env lab m = Env {_diaTightness :: Constant -- ^ Multiplicator to minimize constraints
+data Env lab m = Env {_diaTightness :: Rational -- ^ Multiplicator to minimize constraints
                      ,_diaPathOptions :: PathOptions
                      ,_diaBackend :: Backend lab m}
 
@@ -175,7 +218,8 @@ instance Show a => Show (Pair a) where
 
 data DiagramState = DiagramState
   {_diaNextVar :: Var
-  ,_diaLPState :: LPState
+  ,_diaLinConstraints :: [Constraint Var Constant]
+  ,_diaObjective :: GExpr
   ,_diaVarNames :: Map Var String
   ,_diaNoOverlaps :: [Pair (Point' Expr)]
   }
@@ -183,26 +227,23 @@ data DiagramState = DiagramState
 $(makeLenses ''DiagramState)
 
 newtype Diagram lab m a = Dia {fromDia :: (RWST (Env lab m) [Freeze m] DiagramState m a)}
-  deriving (Monad, Applicative, Functor, MonadReader (Env lab m), MonadWriter [Freeze m])
+  deriving (Monad, Applicative, Functor, MonadReader (Env lab m), MonadWriter [Freeze m], MonadState DiagramState)
 
 -- | @freeze x f@ performs @f@ on the frozen value of @x@.
 freeze :: (Functor t, Monad m) => t Expr -> (t Constant -> m ()) -> Diagram lab m ()
 freeze x f = tell [Freeze (\y -> (f y)) x]
 
-instance Monad m => MonadState LPState (Diagram lab m) where
-  get = Dia $ use diaLPState
-  put y = Dia $ diaLPState .= y
 
 -------------
 -- Diagrams
 
 
 -- | Relax the optimisation functions by the given factor
-relax :: Monad m => Constant -> Diagram lab m a -> Diagram lab m a
-relax factor = tighten (1/factor)
+relax :: Monad m => Rational -> Diagram lab m a -> Diagram lab m a
+relax factor = tighten (one/factor)
 
 -- | Tighten the optimisation functions by the given factor
-tighten :: Monad m => Constant -> Diagram lab m a -> Diagram lab m a
+tighten :: Monad m => Rational -> Diagram lab m a -> Diagram lab m a
 tighten factor = local (over diaTightness (* factor))
 
 --------------
@@ -211,17 +252,12 @@ tighten factor = local (over diaTightness (* factor))
 
 newVar :: Monad m => String -> Diagram lab m Expr
 newVar name = do
-  [v] <- newVars [(name,ContVar)]
+  [v] <- newVars [name]
   return v
 
-newVars :: Monad m => [(String,VarKind)] -> Diagram lab m [Expr]
-newVars kinds = newVars' (zip kinds (repeat Free))
-
-newVars' :: Monad m => [((String,VarKind),Bounds Constant)] -> Diagram lab m [Expr]
-newVars' kinds = forM kinds $ \((name,k),b) -> do
+newVars :: Monad m => [String] -> Diagram lab m [Expr]
+newVars kinds = forM kinds $ \name -> do
   v <- rawNewVar name
-  setVarKind v k
-  setVarBounds v b
   return $ variable v
  where rawNewVar :: Monad m => String -> Diagram lab m Var
        rawNewVar name = Dia $ do
@@ -238,36 +274,39 @@ infix 4 <==,===,>==
 
 runDiagram :: Monad m => Backend lab m -> Diagram lab m a -> m a
 runDiagram backend (Dia diag) = do
-  let env = Env 1 defaultPathOptions backend
+  let env = Env one defaultPathOptions backend
   (a,finalState,ds) <- runRWST diag env $
-    DiagramState (Var 0) (LP Min M.empty [] M.empty M.empty) (M.empty) []
-  let problem0 = finalState ^. diaLPState
-      solution0 = case unsafePerformIO $ glpSolveVars simplexDefaults problem0 of
-        (_retcode,Just (_objFunc,s)) -> s
-        (retcode,Nothing) -> error $ "LP failed ret code = " ++ show retcode
-  (ovlDbg,finalState',_) <- runRWST (fromDia $ resolveNonOverlaps solution0) env finalState
-  let problem1 = finalState' ^. diaLPState
-      solution1 = case unsafePerformIO $ ({-putStrLn "ovlDbg: " >> print ovlDbg >> -}
-        glpSolveVars simplexDefaults problem1) of
-        (_retcode,Just (_objFunc,s)) -> s
-        (retcode,Nothing) -> error $ "LP failed ret code = " ++ show retcode
+    DiagramState (Var 0) [] (GExpr $ \_ -> zero) (M.empty) []
+  let reducedConstraints = M.fromList $ linSolve (finalState ^. diaLinConstraints)
+      maxVar =  finalState ^. diaNextVar
+      objective :: forall s. Reifies s Tape => Map Var (Reverse s Double) -> Reverse s Double
+      objective s =
+        let s' = M.union computed s
+            computed = fmap (valueIn s) reducedConstraints
+        in fromGExpr (finalState ^. diaObjective) (valueIn s')
+      (solution,result,statistics) = unsafePerformIO $ optimize
+        defaultParameters
+        1
+        (M.fromList [(v,0) | v <- [Var 0..maxVar], M.notMember v reducedConstraints])
+        objective
+
   -- Raw Normal $ "%problem solved: " ++ show problem ++ "\n"
-  forM_ ds (\(Freeze f x) -> f (fmap (valueIn solution1) x))
+  forM_ ds (\(Freeze f x) -> f (fmap (valueIn solution) x))
   return a
 
 -- | Value of an expression in the given solution
-valueIn :: Solution -> Expr -> Double
-valueIn sol (LinExpr m c) = sum (c:[scale * varValue v | (v,scale) <- M.assocs m])
+valueIn :: (Mode t,Ring t) => Map Var t -> LinFunc Var (Scalar t) -> t
+valueIn sol (Func m c) = sum (auto c:[auto scale * varValue v | (v,scale) <- M.assocs m])
  where varValue v = M.findWithDefault 0 v sol
 
 
 -- | Embed a variable in an expression
 variable :: Var -> Expr
-variable v = LinExpr (M.singleton v 1) 0
+variable v = Func (M.singleton v 1) 0
 
 -- | Embed a constant in an expression
 constant :: Constant -> Expr
-constant c = LinExpr M.empty c
+constant c = Func M.empty c
 
 (*-) :: Module Constant a => Constant -> a -> a
 (*-) = (*^)
@@ -277,17 +316,9 @@ infixr 7 *-
 avg :: Module Constant a => [a] -> a
 avg xs = (1/fromIntegral (length xs)) *- add xs
 
--- | Absolute value, which can be MINIMIZED or put and upper bound on (but not
--- the other way around).
-absoluteValue :: Monad m => Expr -> Diagram lab m Expr
-absoluteValue x = do
-  [t1,t2] <- newVars' [((("absoluteStack1",ContVar),LBound 0)),(("absoluteStack2",ContVar),LBound 0)]
-  t1 - t2 === x
-  return $ t1 + t2
-
 satAll :: Monad m => String -> (Expr -> a -> Diagram lab m b) -> [a] -> Diagram lab m Expr
 satAll name p xs = do
-  [m] <- newVars [(name,ContVar)]
+  [m] <- newVars [(name)]
   mapM_ (p m) xs
   return m
 
@@ -300,16 +331,18 @@ minimVar = satAll "minimum of" (<==)
 -- Expression constraints
 (===), (>==), (<==) :: Expr -> Expr -> Monad m => Diagram lab m ()
 e1 <== e2 = do
-  let LinExpr f c = e1 - e2
+  let Func f c = e1 - e2
       isFalse = M.null f && c < 0
   when isFalse $ error "Diagrams.Core: inconsistent constraint!"
-  constrName <- (\x y -> x ++ "<= " ++ y) <$> prettyExpr e1 <*> prettyExpr e2
-  leqTo' constrName f (negate c)
+  minimize $ GExpr $ \s ->
+    let [v1,v2] = map s [e1,e2]
+    in if v1 <= v2 then zero else square (v2-v1)
 
-
+square :: forall a. Multiplicative a => a -> a
+square x = x*x
 
 prettyExpr :: Monad m => Expr -> Diagram lab m String
-prettyExpr (LinExpr f k) = do
+prettyExpr (Func f k) = do
   vnames <- Dia (use diaVarNames)
   let vname n = case M.lookup n vnames of
         Nothing -> error ("prettyExpr: variable not found: " ++ show n)
@@ -326,24 +359,24 @@ prettyExpr (LinExpr f k) = do
 (>==) = flip (<==)
 
 e1 === e2 = do
-  let LinExpr f c = e1 - e2
-      isFalse = M.null f && c /= 0
-  when isFalse $ error "Diagrams.Core: inconsistent constraint!"
   constrName <- (\x y -> x ++ " = " ++ y) <$> prettyExpr e1 <*> prettyExpr e2
-  equalTo' constrName f (negate c)
+  diaLinConstraints %= (e1 - e2 :)
+
+generalize :: Expr -> GExpr
+generalize e = GExpr ($ e)
 
 -- | minimize the distance between expressions
-(=~=) :: Monad m => Expr -> Expr -> Diagram lab m ()
-x =~= y = minimize =<< absoluteValue (x-y)
+(=~=) :: Monad m => GExpr -> GExpr -> Diagram lab m ()
+x =~= y = minimize $ square (x-y)
 
 -------------------------
 -- Expression objectives
 
-minimize,maximize :: Monad m => Expr -> Diagram lab m ()
-minimize (LinExpr x _) = do
+minimize,maximize :: Monad m => GExpr -> Diagram lab m ()
+minimize f = do
   tightness <- view diaTightness
-  addObjective (tightness *^ x)
-maximize = minimize . negate
+  diaObjective %= \o -> fromRational tightness * f + o
+maximize f = minimize $ negate f
 
 
 drawText :: Monad m => Point' Expr -> lab -> Diagram lab m BoxSpec

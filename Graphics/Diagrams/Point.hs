@@ -1,4 +1,4 @@
-{-# LANGUAGE TypeSynonymInstances, FlexibleContexts, FlexibleInstances, GeneralizedNewtypeDeriving, MultiParamTypeClasses, RecursiveDo, TypeFamilies, OverloadedStrings, RecordWildCards,UndecidableInstances, PackageImports, TemplateHaskell #-}
+{-# LANGUAGE TypeSynonymInstances, FlexibleContexts, FlexibleInstances, GeneralizedNewtypeDeriving, MultiParamTypeClasses, RecursiveDo, TypeFamilies, OverloadedStrings, RecordWildCards,UndecidableInstances, PackageImports, TemplateHaskell, RankNTypes #-}
 
 module Graphics.Diagrams.Point where
 
@@ -18,13 +18,13 @@ infix 4 .=.
 type Point = Point' Expr
 
 -- | Orthogonal norm of a vector
-orthonorm :: Monad m => Point -> Diagram lab m Expr
-orthonorm (Point x y) =
-  (+) <$> absoluteValue x <*> absoluteValue y
+sqNorm :: Point -> GExpr
+sqNorm p = x*x + y*y
+  where Point x y = generalize <$> p
 
 -- | Orthogonal distance between points.
-orthoDist :: Monad m => Point -> Point -> Diagram lab m Expr
-orthoDist p q = orthonorm (q-p)
+sqDist :: Point -> Point -> GExpr
+sqDist p q = sqNorm (q-p)
 
 -- | Rotate a vector 90 degres in the trigonometric direction.
 rotate90, rotate180 :: Point -> Point
@@ -65,8 +65,10 @@ alignMatrix ls = do
 ---------------------
 -- Point objectives
 
+{-
 southwards, northwards, westwards, eastwards :: Monad m => Point -> Diagram lab m ()
 southwards (Point _ y) = minimize y
 westwards (Point x _) = minimize x
 northwards = southwards . negate
 eastwards = westwards . negate
+-}

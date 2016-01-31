@@ -27,12 +27,17 @@ library
                        Graphics.Diagrams.Core,
                        Graphics.Diagrams.DerivationTrees,
                        Graphics.Diagrams
+
+                       Algebra.Linear
+                       Algebra.Linear.GaussianElimination
   build-depends:       base >=4.8 && < 666,
+                       ad,
                        lens >=4.12,
                        text >=1.2 ,
                        typography-geometry >=1.0 ,
                        gasp,
-                       glpk-hs >=0.3 ,
+                       nonlinear-optimization-ad,
+                       reflection,
                        vector,
                        polynomials-bernstein,
                        mtl >=2.2 ,

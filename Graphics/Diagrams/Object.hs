@@ -77,7 +77,7 @@ labelAt name labell anchor labeled  = do
 -- | A free point
 point :: Monad m => String -> Diagram lab m Object
 point name = do
-  [x,y] <- newVars [(name++".x",ContVar),(name++".y",ContVar)]
+  [x,y] <- newVars [(name++".x"),(name++".y")]
   return $ Object name EmptyPath (\_ -> Point x y)
 
 -- -- | A free point
@@ -86,9 +86,9 @@ point name = do
 
 -- | A box. Anchors are aligned along a grid.
 box :: Monad m => String -> Diagram lab m Object
-box name = do
+box objectName = do
   [n,s,e,w,base,midx,midy] <- newVars $
-     zip (map (\suff -> name++"."++suff) ["north","south","east","west","base","midx","midy"]) (repeat ContVar)
+     (map (\suff -> objectName++"."++suff) ["north","south","east","west","base","midx","midy"])
   n >== base
   base >== s
   w <== e
@@ -138,17 +138,17 @@ fitsIn, fitsHorizontallyIn, fitsVerticallyIn
 o `fitsVerticallyIn` o' = do
   let dyN = ypart $ o' # N - o # N
       dyS = ypart $ o # S - o' # S
-  minimize dyN
+  minimize $ generalize dyN
   dyN >== zero
-  minimize dyS
+  minimize $ generalize dyS
   dyS >== zero
 
 o `fitsHorizontallyIn` o' = do
   let dyW = xpart $ o # W - o' # W
       dyE = xpart $ o' # E - o # E
-  minimize dyW
+  minimize $ generalize dyW
   dyW >== zero
-  minimize dyE
+  minimize $ generalize dyE
   dyE >== zero
 
 a `fitsIn` b = do
@@ -229,8 +229,8 @@ insideBox p o = do
 -- vector.
 autoLabelObj :: Monad m => Box -> OVector -> Diagram lab m ()
 autoLabelObj lab (OVector pt norm) = do
-  pt `insideBox` lab
-  minimize =<< orthoDist (lab#Center) (pt + norm)
+  tighten 10 $ pt `insideBox` lab
+  minimize (sqDist (lab#Center) (pt + norm))
 
 -- | @autoLabel o i@ Layouts the label object @o@ at the given incidence
 -- vector.
@@ -261,7 +261,7 @@ a `topOf` b =  spread vdist nodeDistance [b,a]
 spread :: Monad m => (t -> t -> Expr) -> Expr -> [t] -> Diagram lab m ()
 spread f d (x:y:xs) = do
   f x y >== d
-  minimize $ f x y
+  minimize $ generalize $ f x y
   spread f d (y:xs)
 spread _ _ _ = return ()
 

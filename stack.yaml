@@ -7,7 +7,6 @@ resolver: lts-3.20
 packages:
 - '.'
 - '../gasp'
-- '../glpk'
 
 # Packages to be pulled from upstream that are not in the resolver (e.g., acme-missiles-0.3)
 extra-deps:
@@ -15,7 +14,8 @@ extra-deps:
 - labeled-tree-1.0.0.0
 - polynomials-bernstein-1.1.1
 - typography-geometry-1.0.0.1
-
+- nonlinear-optimization-ad-0.2.1
+- nonlinear-optimization-0.3.10
 
 # Override default flag values for local packages and extra-deps
 flags: {}
