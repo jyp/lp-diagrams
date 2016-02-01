@@ -4,7 +4,6 @@ module Graphics.Diagrams.Point where
 
 import Graphics.Diagrams.Core
 import Data.Foldable
-import Control.Applicative
 import Data.List (transpose)
 import Prelude hiding (sum,mapM_,mapM,concatMap,maximum,minimum,Num(..))
 import Algebra.Classes
@@ -18,13 +17,13 @@ infix 4 .=.
 type Point = Point' Expr
 
 -- | Orthogonal norm of a vector
-sqNorm :: Point -> GExpr
-sqNorm p = x*x + y*y
-  where Point x y = generalize <$> p
+norm :: Point' GExpr -> GExpr
+norm p = sqrt (sqNorm p)
 
--- | Orthogonal distance between points.
-sqDist :: Point -> Point -> GExpr
-sqDist p q = sqNorm (q-p)
+-- | Orthogonal norm of a vector
+sqNorm :: Point' GExpr -> GExpr
+sqNorm p = x*x + y*y
+  where Point x y = p
 
 -- | Rotate a vector 90 degres in the trigonometric direction.
 rotate90, rotate180 :: Point -> Point

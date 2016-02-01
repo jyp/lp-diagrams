@@ -21,7 +21,7 @@ gaussianElim (co@(Func f k):cos) = case M.minViewWithKey f of
 
 substitution :: (Ord v,Ring c, Eq c) => [(v,LinFunc v c)] -> [(v,LinFunc v c)]
 substitution [] = []
-substitution ((v,f):vfs) = (v,f):[(v',subst v f f') | (v',f') <- vfs]
+substitution ((v,f):vfs) = (v,f) : substitution [(v',subst v f f') | (v',f') <- vfs]
 
 subst :: (Eq scalar, Ord v, Ring scalar) => v -> LinFunc v scalar -> LinFunc v scalar -> LinFunc v scalar
 subst v f f'@(Func m _) = clean $ f' - coef *^ var v + coef *^ f
@@ -29,4 +29,4 @@ subst v f f'@(Func m _) = clean $ f' - coef *^ var v + coef *^ f
 
 
 linSolve :: (Eq c, Ord v, Field c) => [Constraint v c] -> [(v, LinFunc v c)]
-linSolve = substitution . reverse . gaussianElim
+linSolve = substitution . reverse . gaussianElim . fmap clean

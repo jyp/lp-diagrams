@@ -28,7 +28,6 @@ extra-package-dbs: []
 
 nix:
   enable: true
-  packages: [glpk]
 
 
 # Require a specific version of stack, using version ranges

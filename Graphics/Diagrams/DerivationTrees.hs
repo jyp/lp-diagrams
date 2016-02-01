@@ -71,8 +71,8 @@ delayD (Node r ps0) = Node r (map delayP ps)
 
 derivationTreeDiag :: Monad m => Derivation lab -> Diagram lab m ()
 derivationTreeDiag d = do
-  [h] <- newVars [("height",ContVar)] -- the height of a layer in the tree.
-  minimize h
+  [h] <- newVars ["height"] -- the height of a layer in the tree.
+  minimize $ fromLinear h
   h >== constant 1
   tree@(T.Node (_,n,_) _) <- toDiagram h d
   forM_ (T.levels tree) $ \ls ->
@@ -83,12 +83,12 @@ derivationTreeDiag d = do
   let leftFringe = map head nonNilLevs
       rightFringe = map last nonNilLevs
       nonNilLevs = filter (not . null) $ T.levels tree
-  [leftMost,rightMost] <- newVars [("leftMost",ContVar),("rightMost",ContVar)]
+  [leftMost,rightMost] <- newVars ["leftMost","rightMost"]
   forM_ leftFringe $ \(p,_,_) ->
     leftMost <== xpart p
   forM_ rightFringe $ \(_,_,p) ->
     xpart p <== rightMost
-  minimize $ 10 *- (rightMost - leftMost)
+  minimize $ 10 * fromLinear (rightMost - leftMost)
   n # Center .=. zero
 
 toDiagPart :: Monad m => Expr -> Premise lab -> Diagram lab m (T.Tree (Point,Object,Point))
@@ -100,7 +100,7 @@ toDiagPart layerHeight (Link{..} ::> rul)
     let pt = ptObj # S
     pt `eastOf` (concl # W)
     pt `westOf` (concl # E)
-    xpart pt =~= xpart (concl # Center)
+    fromLinear (xpart pt) =~= fromLinear (xpart (concl # Center))
     let top = ypart (concl # S)
     ypart pt + (fromIntegral steps *- layerHeight) === top
     using linkStyle $ path $ polyline [ptObj # Base,Point (xpart pt) top]
@@ -158,7 +158,7 @@ toDiagram layerHeight (Node Rule{..} premises) = do
   separ <- hrule "separation"
   separ # N .=. psGrp # S
   align ypart [concl # N,separ # S]
-  minimize $ width separ
+  minimize $ fromLinear $ width separ
   psGrp `fitsHorizontallyIn` separ
   concl `fitsHorizontallyIn` separ
 
@@ -169,10 +169,9 @@ toDiagram layerHeight (Node Rule{..} premises) = do
   -- layout hints (not necessary for "correctness")
   let xd = xdiff (separ # W) (psGrp # W)
   xd   === xdiff (psGrp # E) (separ # E)
-  relax 2 $ (2 *- xd) =~= premisesDist
+  relax 2 $ fromLinear (2 *- xd) =~= fromLinear premisesDist
   -- centering of conclusion
-  xd' <- absoluteValue $ xdiff (separ # Center) (concl # Center)
-  relax 3 $ minimize xd'
+  relax 3 $ minimize $ norm $ fmap fromLinear $ (separ # Center) - (concl # Center)
 
   -- draw the rule.
   using ruleStyle $ path $ polyline [separ # W,separ # E]

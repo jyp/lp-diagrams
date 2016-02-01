@@ -1,11 +1,11 @@
-{-# LANGUAGE TypeSynonymInstances, FlexibleContexts, FlexibleInstances, GeneralizedNewtypeDeriving, MultiParamTypeClasses, RecursiveDo, TypeFamilies, OverloadedStrings, RecordWildCards,UndecidableInstances, PackageImports, TemplateHaskell, RankNTypes, GADTs, ImpredicativeTypes, DeriveFunctor, ScopedTypeVariables #-}
+{-# LANGUAGE TypeSynonymInstances, FlexibleContexts, FlexibleInstances, GeneralizedNewtypeDeriving, MultiParamTypeClasses, RecursiveDo, TypeFamilies, OverloadedStrings, RecordWildCards,UndecidableInstances, PackageImports, TemplateHaskell, RankNTypes, GADTs, ImpredicativeTypes, DeriveFunctor, ScopedTypeVariables, ConstraintKinds #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
 module Graphics.Diagrams.Core (module Graphics.Diagrams.Core) where
 import Prelude hiding (sum,mapM_,mapM,concatMap,Num(..),(/),fromRational,recip,(/))
 import qualified Prelude
 import Control.Monad.RWS hiding (forM,forM_,mapM_,mapM)
-import Algebra.Classes
+import Algebra.Classes as AC
 import Algebra.Linear
 import Algebra.Linear.GaussianElimination
 import Data.Map (Map)
@@ -42,26 +42,57 @@ newtype Var = Var Int
 type Solution = Map Var Double
 
 -- | A non-linear expression. Fixme: replace expr
-type ProtoGExpr = forall r. (Field r,Ord r) => (Expr -> r) -> r
+type ProtoGExpr = forall r. (Field r,Ord r,Floating r) => (Expr -> r) -> r
 newtype GExpr = GExpr {fromGExpr :: ProtoGExpr}
 
 
 instance Additive GExpr where
   zero = GExpr $ \_ -> zero
   GExpr x + GExpr y = GExpr $ \s -> x s + y s
+
 instance AbelianAdditive GExpr where
+
 instance Group GExpr where
   negate (GExpr x) = GExpr $ \s -> negate (x s)
   GExpr x - GExpr y = GExpr $ \s -> x s - y s
+
 instance Division GExpr where
   recip (GExpr x) = GExpr $ \s -> recip (x s)
   GExpr x / GExpr y = GExpr $ \s -> x s / y s
+
 instance Multiplicative GExpr where
   one = GExpr $ \_ -> one
   GExpr x * GExpr y = GExpr $ \s -> x s * y s
+
 instance Ring GExpr where
 instance Field GExpr where
+instance Prelude.Num GExpr where
+  (+) = (AC.+)
+  (-) = (AC.-)
+  (*) = (AC.*)
+  abs (GExpr x) = GExpr $ \s -> Prelude.abs (x s)
+  signum (GExpr x) = GExpr $ \s -> Prelude.signum (x s)
+  fromInteger x = GExpr $ \_ -> fromInteger x
+instance Fractional GExpr where
+  recip (GExpr x) = GExpr $ recip . x
+  fromRational x = GExpr $ \_ -> fromRational x
+liftFloating :: (forall x. Floating x => x -> x) -> GExpr -> GExpr
+liftFloating f (GExpr x) = GExpr $ \s -> f (x s)
 
+instance Floating GExpr where
+    pi = GExpr (\_ -> pi)
+    exp = liftFloating exp
+    log = liftFloating log
+    sin = liftFloating sin
+    cos = liftFloating cos
+    asin = liftFloating asin
+    acos = liftFloating acos
+    atan = liftFloating atan
+    sinh = liftFloating sinh
+    cosh = liftFloating cosh
+    asinh = liftFloating asinh
+    acosh = liftFloating acosh
+    atanh = liftFloating atanh
 
 type Constant = Double
 
@@ -279,19 +310,27 @@ runDiagram backend (Dia diag) = do
     DiagramState (Var 0) [] (GExpr $ \_ -> zero) (M.empty) []
   let reducedConstraints = M.fromList $ linSolve (finalState ^. diaLinConstraints)
       maxVar =  finalState ^. diaNextVar
+      fixedVarValues s = fmap (valueIn s) reducedConstraints
+      freeVars = filter (\v -> M.notMember v reducedConstraints) [Var 0..maxVar]
       objective :: forall s. Reifies s Tape => Map Var (Reverse s Double) -> Reverse s Double
       objective s =
         let s' = M.union computed s
             computed = fmap (valueIn s) reducedConstraints
         in fromGExpr (finalState ^. diaObjective) (valueIn s')
-      (solution,result,statistics) = unsafePerformIO $ optimize
-        defaultParameters
-        1
-        (M.fromList [(v,0) | v <- [Var 0..maxVar], M.notMember v reducedConstraints])
+      (solution,result,statistics) = unsafePerformIO $ do
+       putStrLn $ "free vars: " ++ show freeVars
+       putStrLn $ "reducedConstraints: " ++ show reducedConstraints
+       putStrLn $ "optimizing ..."
+       opt <- optimize
+        defaultParameters {verbose = VeryVerbose}
+        0.01
+        (M.fromList [(v,0) | v <- freeVars ])
         objective
+       putStrLn $ "done!"
+       return opt
 
   -- Raw Normal $ "%problem solved: " ++ show problem ++ "\n"
-  forM_ ds (\(Freeze f x) -> f (fmap (valueIn solution) x))
+  forM_ ds (\(Freeze f x) -> f (fmap (valueIn $ M.union (fixedVarValues solution) solution) x))
   return a
 
 -- | Value of an expression in the given solution
@@ -362,8 +401,8 @@ e1 === e2 = do
   constrName <- (\x y -> x ++ " = " ++ y) <$> prettyExpr e1 <*> prettyExpr e2
   diaLinConstraints %= (e1 - e2 :)
 
-generalize :: Expr -> GExpr
-generalize e = GExpr ($ e)
+fromLinear :: Expr -> GExpr
+fromLinear e = GExpr ($ e)
 
 -- | minimize the distance between expressions
 (=~=) :: Monad m => GExpr -> GExpr -> Diagram lab m ()
