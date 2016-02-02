@@ -5,7 +5,7 @@ module Graphics.Diagrams.Point where
 import Graphics.Diagrams.Core
 import Data.Foldable
 import Data.List (transpose)
-import Prelude hiding (sum,mapM_,mapM,concatMap,maximum,minimum,Num(..))
+import Prelude hiding (sum,mapM_,mapM,concatMap,maximum,minimum,Num(..),(/))
 import Algebra.Classes
 
 infix 4 .=.
@@ -16,20 +16,29 @@ infix 4 .=.
 
 type Point = Point' Expr
 
--- | Orthogonal norm of a vector
+-- | Norm of a vector. Don't minimize this: the solver does not like functions
+-- with non-continuous derivatives (at zero in this case).
 norm :: Point' GExpr -> GExpr
 norm p = sqrt (sqNorm p)
 
--- | Orthogonal norm of a vector
+normalize :: Point' GExpr -> Point' GExpr
+normalize x = (1/norm x) *^ x
+
+-- | Dot product
+dotProd :: forall a. (Ring a) => Point' a -> Point' a -> a
+dotProd (Point x y) (Point x' y') = x*x' + y*y'
+
+-- | Squared norm of a vector
 sqNorm :: forall a. (Ring a) => Point' a -> a
-sqNorm p = x*x + y*y
-  where Point x y = p
+sqNorm p = dotProd p p
 
 -- | Rotate a vector 90 degres in the trigonometric direction.
-rotate90, rotate180 :: Point -> Point
+rotate90 :: forall a. Group a => Point' a -> Point' a
 rotate90 (Point x y) = Point (negate y) x
 
-rotate180 = rotate90 . rotate90
+-- | Rotate a vector 180 degres
+rotate180 :: forall a. Group a => Point' a -> Point' a
+rotate180 x = rotate90 . rotate90 $ x
 
 xdiff,ydiff :: Point -> Point -> Expr
 xdiff p q = xpart (q - p)

@@ -63,6 +63,8 @@ instance Division GExpr where
 instance Multiplicative GExpr where
   one = GExpr $ \_ -> one
   GExpr x * GExpr y = GExpr $ \s -> x s * y s
+instance Module GExpr GExpr where
+  (*^) = (*)
 
 instance Ring GExpr where
 instance Field GExpr where
@@ -102,6 +104,9 @@ type Expr = LinFunc Var Constant
 data Point' a = Point {xpart :: a, ypart :: a}
   deriving (Eq,Show,Functor)
 
+instance Module k a => Module k (Point' a) where
+  (*^) scalar = fmap (scalar *^)
+
 instance Traversable Point' where
   traverse f (Point x y) = Point <$> f x <*> f y
 
@@ -121,9 +126,6 @@ instance AbelianAdditive v => AbelianAdditive (Point' v) where
 instance Group v => Group (Point' v) where
   negate (Point x y) = Point (negate x) (negate y)
   Point x1 y1 - Point x2 y2 = Point (x1 - x2) (y1 - y2)
-
-instance Module Constant v => Module Constant (Point' v) where
-  k *^ Point x y = Point (k *^ x) (k *^ y)
 
 type Frozen x = x Constant
 type FrozenPoint = Frozen Point'
