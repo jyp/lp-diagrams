@@ -21,7 +21,7 @@ norm :: Point' GExpr -> GExpr
 norm p = sqrt (sqNorm p)
 
 -- | Orthogonal norm of a vector
-sqNorm :: Point' GExpr -> GExpr
+sqNorm :: forall a. (Ring a) => Point' a -> a
 sqNorm p = x*x + y*y
   where Point x y = p
 

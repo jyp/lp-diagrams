@@ -252,7 +252,7 @@ data DiagramState = DiagramState
   ,_diaLinConstraints :: [Constraint Var Constant]
   ,_diaObjective :: GExpr
   ,_diaVarNames :: Map Var String
-  ,_diaNoOverlaps :: [Pair (Point' Expr)]
+  ,_diaNoOverlaps :: [Pair (Point' GExpr)]
   }
 
 $(makeLenses ''DiagramState)
@@ -304,9 +304,9 @@ infix 4 <==,===,>==
 -- Expressions
 
 runDiagram :: Monad m => Backend lab m -> Diagram lab m a -> m a
-runDiagram backend (Dia diag) = do
+runDiagram backend diag = do
   let env = Env one defaultPathOptions backend
-  (a,finalState,ds) <- runRWST diag env $
+  (a,finalState,ds) <- runRWST (fromDia $ do x<-diag;resolveNonOverlaps;return x) env $
     DiagramState (Var 0) [] (GExpr $ \_ -> zero) (M.empty) []
   let reducedConstraints = M.fromList $ linSolve (finalState ^. diaLinConstraints)
       maxVar =  finalState ^. diaNextVar
@@ -324,12 +324,11 @@ runDiagram backend (Dia diag) = do
        opt <- optimize
         defaultParameters {verbose = VeryVerbose}
         0.01
-        (M.fromList [(v,0) | v <- freeVars ])
+        (M.fromList [(Var v,0) | Var v <- freeVars ])
         objective
        putStrLn $ "done!"
        return opt
 
-  -- Raw Normal $ "%problem solved: " ++ show problem ++ "\n"
   forM_ ds (\(Freeze f x) -> f (fmap (valueIn $ M.union (fixedVarValues solution) solution) x))
   return a
 
@@ -430,25 +429,21 @@ diaRaw = Dia . lift
 -- Non-overlapping things
 
 registerNonOverlap :: Monad m => Point' Expr -> Point' Expr -> Diagram lab m ()
-registerNonOverlap nw se = Dia $ diaNoOverlaps %= (Pair nw se:)
+registerNonOverlap nw se = Dia $ diaNoOverlaps %= (Pair (fromLinear <$> nw) (fromLinear <$>  se):)
 
+surface (Point x y) = x*y
 
--- resolveNonOverlaps :: Monad m => Solution -> Diagram lab m Bool
-resolveNonOverlaps s = do
+resolveNonOverlaps :: Monad m => Diagram lab m ()
+resolveNonOverlaps = do
   noOvl <- Dia $ use diaNoOverlaps
-  forM_ (allPairs noOvl) (\(pair :: Pair (Pair (Point' Expr))) -> do
-    let frozenPair@(Pair bx1@(Pair nw1 _) bx2@(Pair nw2 _)) = fmap (fmap (fmap (valueIn s))) pair
-        overlap = inters bx1 bx2
-        doSomething = nonEmpty overlap
-    when doSomething $ do
-        let part :: forall a. Point' a -> a
-            part = (if xpart overlap > ypart overlap then ypart else xpart)
-            Pair (Pair _ p1) (Pair p2 _) = (if part nw1 < part nw2 then id else flipPair) pair
-        part p1 <== part p2
-    return ())
-  where
-    allPairs [] = []
-    allPairs (x:xs) = [Pair x y | y <- xs] ++ allPairs xs
-    inters (Pair p1 q1) (Pair p2 q2) = (max <$> q1 <*> q2) - (min <$> p1 <*> p2)
-    nonEmpty (Point a b) = a > 0 && b > 0
-    flipPair (Pair a b) = Pair b a
+  minimize $ GExpr $ \s ->
+    sum $ do
+      pair <- allPairs noOvl
+      let (Pair bx1 bx2) = fmap (fmap (fmap (($ s) . fromGExpr))) pair
+          overlap = inters bx1 bx2
+      return $ if nonEmpty overlap then (square $ surface overlap) else 0
+    where
+      allPairs [] = []
+      allPairs (x:xs) = [Pair x y | y <- xs] ++ allPairs xs
+      inters (Pair p1 q1) (Pair p2 q2) = (min <$> q1 <*> q2) - (max <$> p1 <*> p2)
+      nonEmpty (Point a b) = a > 0 && b > 0
