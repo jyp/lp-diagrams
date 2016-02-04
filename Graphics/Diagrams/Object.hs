@@ -17,7 +17,9 @@ data Anchor = Center | N | NW | W | SW | S | SE | E | NE | BaseW | Base | BaseE
 type Box = Object
 
 type Anchorage = Anchor -> Point
-data Object = Object {objectName :: String, objectOutline :: Path, anchors :: Anchorage}
+data Object = Object { objectName :: !String
+                     , objectOutline :: !Path
+                     , anchors :: !Anchorage}
 
 
 infix 8 #
@@ -86,9 +88,9 @@ point name = do
 
 -- | A box. Anchors are aligned along a grid.
 box :: Monad m => String -> Diagram lab m Object
-box name = do
+box objectName = do
   [n,s,e,w,base,midx,midy] <- newVars $
-     zip (map (\suff -> name++"."++suff) ["north","south","east","west","base","midx","midy"]) (repeat ContVar)
+     zip (map (\suff -> objectName++"."++suff) ["north","south","east","west","base","midx","midy"]) (repeat ContVar)
   n >== base
   base >== s
   w <== e
