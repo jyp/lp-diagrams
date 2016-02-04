@@ -304,7 +304,7 @@ e1 <== e2 = do
       isFalse = M.null f && c < 0
   when isFalse $ error "Diagrams.Core: inconsistent constraint!"
   constrName <- (\x y -> x ++ "<= " ++ y) <$> prettyExpr e1 <*> prettyExpr e2
-  leqTo' constrName f (negate c)
+  leqTo f (negate c)
 
 
 
@@ -330,7 +330,7 @@ e1 === e2 = do
       isFalse = M.null f && c /= 0
   when isFalse $ error "Diagrams.Core: inconsistent constraint!"
   constrName <- (\x y -> x ++ " = " ++ y) <$> prettyExpr e1 <*> prettyExpr e2
-  equalTo' constrName f (negate c)
+  equalTo f (negate c)
 
 -- | minimize the distance between expressions
 (=~=) :: Monad m => Expr -> Expr -> Diagram lab m ()
