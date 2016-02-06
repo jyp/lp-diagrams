@@ -166,6 +166,7 @@ circle name = do
       p = circlePath (bx # Center) radius
   pathObject $ Object name p (anchors bx)
 
+-- | Debug, by tracing the bounding box of the object in a certain color.
 traceBox :: (Monad m) => Color -> Object -> Diagram lab m ()
 traceBox c l = do
   stroke c $ path $ polygon (map (l #) [NW,NE,SE,SW])
