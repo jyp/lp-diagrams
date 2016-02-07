@@ -374,9 +374,9 @@ e1 <== e2 = do
   let Func f c = e1 - e2
       isFalse = M.null f && c < 0
   when isFalse $ error "Diagrams.Core: inconsistent constraint!"
-  minimize $ GExpr $ \s ->
+  minimize' $ GExpr $ \s ->
     let [v1,v2] = map s [e1,e2]
-    in if v1 <= v2 then zero else square (v2-v1)
+    in if v1 <= v2 then zero else square (square (v2-v1))
 
 square :: forall a. Multiplicative a => a -> a
 square x = x*x
@@ -407,16 +407,20 @@ fromLinear e = GExpr ($ e)
 
 -- | minimize the distance between expressions
 (=~=) :: Monad m => GExpr -> GExpr -> Diagram lab m ()
-x =~= y = minimize $ square (x-y)
+x =~= y = minimize' $ square (x-y)
 
 -------------------------
 -- Expression objectives
 
-minimize,maximize :: Monad m => GExpr -> Diagram lab m ()
-minimize f = do
+minimize,maximize :: Monad m => Expr -> Diagram lab m ()
+minimize = minimize' . fromLinear
+maximize = minimize . negate
+
+minimize',maximize' :: Monad m => GExpr -> Diagram lab m ()
+maximize' = minimize' . negate
+minimize' f = do
   tightness <- view diaTightness
   diaObjective %= \o -> fromRational tightness * f + o
-maximize f = minimize $ negate f
 
 
 drawText :: Monad m => Point' Expr -> lab -> Diagram lab m BoxSpec
@@ -433,12 +437,13 @@ diaRaw = Dia . lift
 registerNonOverlap :: Monad m => Point' Expr -> Point' Expr -> Diagram lab m ()
 registerNonOverlap nw se = Dia $ diaNoOverlaps %= (Pair (fromLinear <$> nw) (fromLinear <$>  se):)
 
+surface :: forall a. Multiplicative a => Point' a -> a
 surface (Point x y) = x*y
 
 resolveNonOverlaps :: Monad m => Diagram lab m ()
 resolveNonOverlaps = do
   noOvl <- Dia $ use diaNoOverlaps
-  minimize $ GExpr $ \s ->
+  minimize' $ GExpr $ \s ->
     sum $ do
       pair <- allPairs noOvl
       let (Pair bx1 bx2) = fmap (fmap (fmap (($ s) . fromGExpr))) pair

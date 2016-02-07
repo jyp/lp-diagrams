@@ -72,7 +72,7 @@ delayD (Node r ps0) = Node r (map delayP ps)
 derivationTreeDiag :: Monad m => Derivation lab -> Diagram lab m ()
 derivationTreeDiag d = do
   [h] <- newVars ["height"] -- the height of a layer in the tree.
-  minimize $ fromLinear h
+  minimize h
   h >== constant 1
   tree@(T.Node (_,n,_) _) <- toDiagram h d
   forM_ (T.levels tree) $ \ls ->
@@ -88,7 +88,7 @@ derivationTreeDiag d = do
     leftMost <== xpart p
   forM_ rightFringe $ \(_,_,p) ->
     xpart p <== rightMost
-  minimize $ 10 * fromLinear (rightMost - leftMost)
+  minimize $ 10 *- (rightMost - leftMost)
   n # Center .=. zero
 
 toDiagPart :: Monad m => Expr -> Premise lab -> Diagram lab m (T.Tree (Point,Object,Point))
@@ -158,7 +158,7 @@ toDiagram layerHeight (Node Rule{..} premises) = do
   separ <- hrule "separation"
   separ # N .=. psGrp # S
   align ypart [concl # N,separ # S]
-  minimize $ fromLinear $ width separ
+  minimize $ width separ
   psGrp `fitsHorizontallyIn` separ
   concl `fitsHorizontallyIn` separ
 
@@ -171,7 +171,7 @@ toDiagram layerHeight (Node Rule{..} premises) = do
   xd   === xdiff (psGrp # E) (separ # E)
   relax 2 $ fromLinear (2 *- xd) =~= fromLinear premisesDist
   -- centering of conclusion
-  relax 3 $ minimize $ norm $ fmap fromLinear $ (separ # Center) - (concl # Center)
+  relax 3 $ minimize' $ sqNorm $ fmap fromLinear $ (separ # Center) - (concl # Center)
 
   -- draw the rule.
   using ruleStyle $ path $ polyline [separ # W,separ # E]

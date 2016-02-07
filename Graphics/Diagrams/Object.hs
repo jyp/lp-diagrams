@@ -138,17 +138,17 @@ fitsIn, fitsHorizontallyIn, fitsVerticallyIn
 o `fitsVerticallyIn` o' = do
   let dyN = ypart $ o' # N - o # N
       dyS = ypart $ o # S - o' # S
-  minimize $ fromLinear dyN
+  minimize dyN
   dyN >== zero
-  minimize $ fromLinear dyS
+  minimize dyS
   dyS >== zero
 
 o `fitsHorizontallyIn` o' = do
   let dyW = xpart $ o # W - o' # W
       dyE = xpart $ o' # E - o # E
-  minimize $ fromLinear dyW
+  minimize dyW
   dyW >== zero
-  minimize $ fromLinear dyE
+  minimize dyE
   dyE >== zero
 
 a `fitsIn` b = do
@@ -234,9 +234,9 @@ autoLabelObj lab (OVector pt v) = do
   -- label must touch the point
   tighten 10 $ pt `insideBox` lab
   -- go as far as possible in the normal direction
-  maximize $ dotProd (fromLinear <$> ((lab#Center) - pt)) normalVector
+  maximize' $ dotProd (fromLinear <$> ((lab#Center) - pt)) normalVector
   -- don't stray from the normal line
-  minimize $ square $ dotProd (fromLinear <$> ((lab#Center) - pt)) (rotate90 normalVector)
+  minimize' $ square $ dotProd (fromLinear <$> ((lab#Center) - pt)) (rotate90 normalVector)
   --
 
 -- | @autoLabel o i@ Layouts the label object @o@ at the given incidence
@@ -268,7 +268,7 @@ a `topOf` b =  spread vdist nodeDistance [b,a]
 spread :: Monad m => (t -> t -> Expr) -> Expr -> [t] -> Diagram lab m ()
 spread f d (x:y:xs) = do
   f x y >== d
-  minimize $ fromLinear $ f x y
+  minimize $ f x y
   spread f d (y:xs)
 spread _ _ _ = return ()
 
