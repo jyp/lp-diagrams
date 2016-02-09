@@ -21,6 +21,9 @@ import Numeric.AD.Internal.Reverse (Reverse,Tape)
 instance Reifies s Tape => Multiplicative (Reverse s Double) where
   (*) = (Prelude.*)
   one = 1
+instance Reifies s Tape => Module Double (Reverse s Double) where
+  k *^ x = auto k * x
+
 instance Reifies s Tape => Group (Reverse s Double) where
   negate = (Prelude.negate)
   (-) = (Prelude.-)
@@ -42,7 +45,9 @@ newtype Var = Var Int
 type Solution = Map Var Double
 
 -- | A non-linear expression. Fixme: replace expr
-type ProtoGExpr = forall r. (Field r,Ord r,Floating r) => (Expr -> r) -> r
+-- type ProtoGExpr = forall r. (Field r,Ord r,Floating r,Module Constant r) => (Var -> r) -> r
+-- the above is much slower.
+type ProtoGExpr = forall s. (Reifies s Tape) => (Var -> Reverse s Double) -> Reverse s Double
 newtype GExpr = GExpr {fromGExpr :: ProtoGExpr}
 
 
@@ -318,7 +323,7 @@ runDiagram backend diag = do
       objective s =
         let s' = M.union computed s
             computed = fmap (valueIn s) reducedConstraints
-        in fromGExpr (finalState ^. diaObjective) (valueIn s')
+        in fromGExpr (finalState ^. diaObjective) (valueIn' s')
       (solution,result,statistics) = unsafePerformIO $ do
        putStrLn $ "free vars: " ++ show freeVars
        putStrLn $ "reducedConstraints: " ++ show reducedConstraints
@@ -339,6 +344,9 @@ valueIn :: (Mode t,Ring t) => Map Var t -> LinFunc Var (Scalar t) -> t
 valueIn sol (Func m c) = sum (auto c:[auto scale * varValue v | (v,scale) <- M.assocs m])
  where varValue v = M.findWithDefault 0 v sol
 
+-- | Value of an expression in the given solution
+valueIn' :: (Mode t,Ring t) => Map Var t -> Var -> t
+valueIn' sol v = M.findWithDefault 0 v sol
 
 -- | Embed a variable in an expression
 variable :: Var -> Expr
@@ -375,7 +383,7 @@ e1 <== e2 = do
       isFalse = M.null f && c < 0
   when isFalse $ error "Diagrams.Core: inconsistent constraint!"
   minimize' $ GExpr $ \s ->
-    let [v1,v2] = map s [e1,e2]
+    let [v1,v2] = map (($ s) . fromGExpr . fromLinear) [e1,e2]
     in if v1 <= v2 then zero else square (square (v2-v1))
 
 square :: forall a. Multiplicative a => a -> a
@@ -403,7 +411,7 @@ e1 === e2 = do
   diaLinConstraints %= (e1 - e2 :)
 
 fromLinear :: Expr -> GExpr
-fromLinear e = GExpr ($ e)
+fromLinear (Func m c) = GExpr $ \s -> c *^ one + fromSum (M.foldMapWithKey (\v k -> AC.Sum (k *^ s v)) m)
 
 -- | minimize the distance between expressions
 (=~=) :: Monad m => GExpr -> GExpr -> Diagram lab m ()
