@@ -50,6 +50,17 @@ type Solution = Map Var Double
 type ProtoGExpr = forall s. (Reifies s Tape) => (Var -> Reverse s Double) -> Reverse s Double
 newtype GExpr = GExpr {fromGExpr :: ProtoGExpr}
 
+(>>>=) :: GExpr -> (Var -> GExpr) -> GExpr
+GExpr p >>>= f = GExpr $ \k -> p (\a -> fromGExpr (f a) k)
+
+fromLinear :: Expr -> GExpr
+fromLinear e = GExpr $ \s -> fromLinear' one e s
+
+fromLinear' :: forall a scalar. (Module scalar a) => a -> LinFunc Var scalar -> (Var -> a) -> a
+fromLinear' unit (Func m c) f = c *^ unit + fromSum (M.foldMapWithKey (\v k -> AC.Sum (k *^ f v)) m)
+
+substLinear :: Expr -> (Var -> Expr) -> Expr
+substLinear = fromLinear' (Func M.empty 1)
 
 instance Additive GExpr where
   zero = GExpr $ \_ -> zero
@@ -316,8 +327,11 @@ runDiagram backend diag = do
   (a,finalState,ds) <- runRWST (fromDia $ do x<-diag;resolveNonOverlaps;return x) env $
     DiagramState (Var 0) [] (GExpr $ \_ -> zero) (M.empty) []
   let reducedConstraints = M.fromList $ linSolve (finalState ^. diaLinConstraints)
+      linSolvSubst v = case M.lookup v reducedConstraints of
+        Nothing -> var v
+        Just x -> x
       maxVar =  finalState ^. diaNextVar
-      fixedVarValues s = fmap (valueIn s) reducedConstraints
+      -- fixedVarValues s = fmap (valueIn s) reducedConstraints
       freeVars = filter (\v -> M.notMember v reducedConstraints) [Var 0..maxVar]
       objective :: forall s. Reifies s Tape => Map Var (Reverse s Double) -> Reverse s Double
       objective s =
@@ -336,7 +350,7 @@ runDiagram backend diag = do
        putStrLn $ "done!"
        return opt
 
-  forM_ ds (\(Freeze f x) -> f (fmap (valueIn $ M.union (fixedVarValues solution) solution) x))
+  forM_ ds (\(Freeze f x) -> f (fmap (valueIn solution . (`substLinear` linSolvSubst)) x))
   return a
 
 -- | Value of an expression in the given solution
@@ -409,9 +423,6 @@ prettyExpr (Func f k) = do
 e1 === e2 = do
   constrName <- (\x y -> x ++ " = " ++ y) <$> prettyExpr e1 <*> prettyExpr e2
   diaLinConstraints %= (e1 - e2 :)
-
-fromLinear :: Expr -> GExpr
-fromLinear (Func m c) = GExpr $ \s -> c *^ one + fromSum (M.foldMapWithKey (\v k -> AC.Sum (k *^ s v)) m)
 
 -- | minimize the distance between expressions
 (=~=) :: Monad m => GExpr -> GExpr -> Diagram lab m ()
