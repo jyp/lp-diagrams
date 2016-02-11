@@ -14,11 +14,16 @@ import Control.Lens hiding (element)
 import Data.Traversable
 import Data.Foldable
 import System.IO.Unsafe
-import Numeric.Optimization.Algorithms.HagerZhang05.AD
 import Data.Reflection (Reifies)
 import Numeric.AD.Internal.Reverse (Reverse,Tape)
 import Data.Vector (Vector,(!))
 import qualified Data.Vector as V
+import qualified Data.Vector.Storable as S
+import Numeric.AD
+import Numeric.AD.Mode.Reverse
+import Numeric.Optimization.Algorithms.HagerZhang05 hiding (optimize)
+import qualified Numeric.Optimization.Algorithms.HagerZhang05 as HagerZhang05
+
 
 instance Reifies s Tape => Multiplicative (Reverse s Double) where
   (*) = (Prelude.*)
@@ -359,16 +364,17 @@ runDiagram backend diag = do
         defaultParameters {verbose = VeryVerbose}
         0.01
         (V.replicate (length freeVars) 0)
-        -- (M.fromList [(v,0) | v <- freeVars])
         objective
        putStrLn $ "done!"
        return opt
 
-  forM_ ds (\(Freeze f x) -> f (fmap (valueIn (vAccess solution) . (`substLinear` (rename varMap . linSolvSubst))) x))
+  forM_ ds (\(Freeze f x) -> f (fmap (valueIn (sAccess solution) . (`substLinear` (rename varMap . linSolvSubst))) x))
   return a
 
 vAccess :: Vector x -> Var -> x
 vAccess xs (Var ix) = xs ! ix
+
+sAccess xs (Var ix) = xs S.! ix
 
 vAccess' xs ix = M.findWithDefault zero ix xs
 
@@ -491,3 +497,16 @@ resolveNonOverlaps = do
       allPairs (x:xs) = [Pair x y | y <- xs] ++ allPairs xs
       inters (Pair p1 q1) (Pair p2 q2) = (min <$> q1 <*> q2) - (max <$> p1 <*> p2)
       nonEmpty (Point a b) = a > 0 && b > 0
+
+-- It uses reverse mode automatic differentiation to compute the gradient.
+optimize
+  :: Parameters  -- ^ How should we optimize.
+  -> Double      -- ^ @grad_tol@, see 'stopRules'.
+  -> Vector Double    -- ^ Initial guess.
+  -> (forall s. Reifies s Tape => Vector (Reverse s Double) -> Reverse s Double) -- ^ Function to be minimized.
+  -> IO (S.Vector Double, Result, Statistics)
+optimize params grad_tol initial f =
+  let vf = fst . grad' f
+      vg = grad f
+      vc = grad' f
+  in HagerZhang05.optimize params grad_tol initial (VFunction vf) (VGradient vg) (Just (VCombined vc))
