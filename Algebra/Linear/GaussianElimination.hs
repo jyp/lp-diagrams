@@ -1,5 +1,5 @@
 {-# LANGUAGE MultiParamTypeClasses, FlexibleInstances, RebindableSyntax, DeriveFunctor #-}
-module Algebra.Linear.GaussianElimination where
+module Algebra.Linear.GaussianElimination (linSolve) where
 
 import Prelude hiding (Num(..),(/))
 import Algebra.Classes

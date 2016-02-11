@@ -17,6 +17,8 @@ import System.IO.Unsafe
 import Numeric.Optimization.Algorithms.HagerZhang05.AD
 import Data.Reflection (Reifies)
 import Numeric.AD.Internal.Reverse (Reverse,Tape)
+import Data.Vector (Vector,(!))
+import qualified Data.Vector as V
 
 instance Reifies s Tape => Multiplicative (Reverse s Double) where
   (*) = (Prelude.*)
@@ -50,8 +52,14 @@ type Solution = Map Var Double
 type ProtoGExpr = forall s. (Reifies s Tape) => (Var -> Reverse s Double) -> Reverse s Double
 newtype GExpr = GExpr {fromGExpr :: ProtoGExpr}
 
-(>>>=) :: GExpr -> (Var -> GExpr) -> GExpr
-GExpr p >>>= f = GExpr $ \k -> p (\a -> fromGExpr (f a) k)
+tabulate :: Var -> (Var -> a) -> (Var -> a)
+tabulate (Var n) f (Var ix) = V.generate n (f . Var) ! ix
+
+tabulateMap :: Var -> (Var -> a) -> (Var -> a)
+tabulateMap n f v = M.findWithDefault (error "tabMap out of range") v (M.fromList [(i,f i) | i <- [Var 0..n]])
+
+subst :: Var -> GExpr -> (Var -> GExpr) -> GExpr
+subst maxVar (GExpr p) f = GExpr $ \k -> p (tabulateMap maxVar (\a -> fromGExpr (f a) k))
 
 fromLinear :: Expr -> GExpr
 fromLinear e = GExpr $ \s -> fromLinear' one e s
@@ -61,6 +69,9 @@ fromLinear' unit (Func m c) f = c *^ unit + fromSum (M.foldMapWithKey (\v k -> A
 
 substLinear :: Expr -> (Var -> Expr) -> Expr
 substLinear = fromLinear' (Func M.empty 1)
+
+rename :: (Var -> Var) -> Expr -> Expr
+rename f e = substLinear e (var . f)
 
 instance Additive GExpr where
   zero = GExpr $ \_ -> zero
@@ -327,16 +338,18 @@ runDiagram backend diag = do
   (a,finalState,ds) <- runRWST (fromDia $ do x<-diag;resolveNonOverlaps;return x) env $
     DiagramState (Var 0) [] (GExpr $ \_ -> zero) (M.empty) []
   let reducedConstraints = M.fromList $ linSolve (finalState ^. diaLinConstraints)
+      varMap  x = M.findWithDefault (Var 0) x $ M.fromList (zip freeVars [Var 0..])
+      reducedConstraints' = fmap (rename varMap) reducedConstraints
       linSolvSubst v = case M.lookup v reducedConstraints of
         Nothing -> var v
         Just x -> x
       maxVar =  finalState ^. diaNextVar
       -- fixedVarValues s = fmap (valueIn s) reducedConstraints
       freeVars = filter (\v -> M.notMember v reducedConstraints) [Var 0..maxVar]
-      objective :: forall s. Reifies s Tape => Map Var (Reverse s Double) -> Reverse s Double
+      objective :: forall s. Reifies s Tape => Vector (Reverse s Double) -> Reverse s Double
       objective s =
-        let s' = M.union computed s
-            computed = fmap (valueIn s) reducedConstraints
+        let s' = M.union computed (M.fromList $ zip freeVars (toList s))
+            computed = fmap (valueIn (vAccess s)) reducedConstraints'
         in fromGExpr (finalState ^. diaObjective) (valueIn' s')
       (solution,result,statistics) = unsafePerformIO $ do
        putStrLn $ "free vars: " ++ show freeVars
@@ -345,18 +358,23 @@ runDiagram backend diag = do
        opt <- optimize
         defaultParameters {verbose = VeryVerbose}
         0.01
-        (M.fromList [(Var v,0) | Var v <- freeVars ])
+        (V.replicate (length freeVars) 0)
+        -- (M.fromList [(v,0) | v <- freeVars])
         objective
        putStrLn $ "done!"
        return opt
 
-  forM_ ds (\(Freeze f x) -> f (fmap (valueIn solution . (`substLinear` linSolvSubst)) x))
+  forM_ ds (\(Freeze f x) -> f (fmap (valueIn (vAccess solution) . (`substLinear` (rename varMap . linSolvSubst))) x))
   return a
 
+vAccess :: Vector x -> Var -> x
+vAccess xs (Var ix) = xs ! ix
+
+vAccess' xs ix = M.findWithDefault zero ix xs
+
 -- | Value of an expression in the given solution
-valueIn :: (Mode t,Ring t) => Map Var t -> LinFunc Var (Scalar t) -> t
-valueIn sol (Func m c) = sum (auto c:[auto scale * varValue v | (v,scale) <- M.assocs m])
- where varValue v = M.findWithDefault 0 v sol
+valueIn :: (Mode t,Ring t) => (Var -> t) -> LinFunc Var (Scalar t) -> t
+valueIn sol (Func m c) = sum (auto c:[auto scale * sol v | (v,scale) <- M.assocs m])
 
 -- | Value of an expression in the given solution
 valueIn' :: (Mode t,Ring t) => Map Var t -> Var -> t
