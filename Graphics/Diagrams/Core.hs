@@ -6,7 +6,7 @@ import Prelude hiding (sum,mapM_,mapM,concatMap,Num(..),(/),fromRational,recip,(
 import qualified Prelude
 import Control.Monad.RWS hiding (forM,forM_,mapM_,mapM)
 import Algebra.Classes as AC
-import Algebra.Linear
+import Algebra.Linear as Linear
 import Algebra.Linear.GaussianElimination
 import Data.Map (Map)
 import qualified Data.Map.Strict as M
@@ -15,16 +15,14 @@ import Data.Traversable
 import Data.Foldable
 import System.IO.Unsafe
 import Data.Reflection (Reifies)
-import Numeric.AD.Internal.Reverse (Reverse,Tape)
 import Data.Vector (Vector,(!))
 import qualified Data.Vector as V
 import qualified Data.Vector.Storable as S
-import Numeric.AD
-import Numeric.AD.Mode.Reverse
 import Numeric.Optimization.Algorithms.HagerZhang05 hiding (optimize)
 import qualified Numeric.Optimization.Algorithms.HagerZhang05 as HagerZhang05
+import Algebra.AD as AD
 
-
+{-
 instance Reifies s Tape => Multiplicative (Reverse s Double) where
   (*) = (Prelude.*)
   one = 1
@@ -44,40 +42,13 @@ instance Reifies s Tape => Division (Reverse s Double) where
   recip = Prelude.recip
   (/) = (Prelude./)
 instance Reifies s Tape => Field (Reverse s Double)
-
-newtype Var = Var Int
-  deriving (Ord,Eq,Show,Enum)
-
--- | Solution of the linear programming problem
-type Solution = Map Var Double
-
--- | A non-linear expression. Fixme: replace expr
--- type ProtoGExpr = forall r. (Field r,Ord r,Floating r,Module Constant r) => (Var -> r) -> r
--- the above is much slower.
 type ProtoGExpr = forall s. (Reifies s Tape) => (Var -> Reverse s Double) -> Reverse s Double
 newtype GExpr = GExpr {fromGExpr :: ProtoGExpr}
-
-tabulate :: Var -> (Var -> a) -> (Var -> a)
-tabulate (Var n) f (Var ix) = V.generate n (f . Var) ! ix
-
-tabulateMap :: Var -> (Var -> a) -> (Var -> a)
-tabulateMap n f v = M.findWithDefault (error "tabMap out of range") v (M.fromList [(i,f i) | i <- [Var 0..n]])
-
 subst :: Var -> GExpr -> (Var -> GExpr) -> GExpr
 subst maxVar (GExpr p) f = GExpr $ \k -> p (tabulateMap maxVar (\a -> fromGExpr (f a) k))
 
 fromLinear :: Expr -> GExpr
 fromLinear e = GExpr $ \s -> fromLinear' one e s
-
-fromLinear' :: forall a scalar. (Module scalar a) => a -> LinFunc Var scalar -> (Var -> a) -> a
-fromLinear' unit (Func m c) f = c *^ unit + fromSum (M.foldMapWithKey (\v k -> AC.Sum (k *^ f v)) m)
-
-substLinear :: Expr -> (Var -> Expr) -> Expr
-substLinear = fromLinear' (Func M.empty 1)
-
-rename :: (Var -> Var) -> Expr -> Expr
-rename f e = substLinear e (var . f)
-
 instance Additive GExpr where
   zero = GExpr $ \_ -> zero
   GExpr x + GExpr y = GExpr $ \s -> x s + y s
@@ -127,6 +98,36 @@ instance Floating GExpr where
     asinh = liftFloating asinh
     acosh = liftFloating acosh
     atanh = liftFloating atanh
+-- | Value of an expression in the given solution
+valueIn :: (Mode t,Ring t) => (Var -> t) -> LinFunc Var (Scalar t) -> t
+valueIn sol (Func m c) = sum (auto c:[auto scale * sol v | (v,scale) <- M.assocs m])
+
+-- | Value of an expression in the given solution
+valueIn' :: (Mode t,Ring t) => Map Var t -> Var -> t
+valueIn' sol v = M.findWithDefault 0 v sol
+-}
+
+newtype Var = Var Int
+  deriving (Ord,Eq,Show,Enum)
+
+-- | Solution of the linear programming problem
+type Solution = Map Var Double
+
+
+-- | A non-linear expression.
+type GExpr = E Var Constant
+
+fromLinear :: Expr -> GExpr
+fromLinear m = fromLinear' one m AD.var
+
+fromLinear' :: forall a scalar. (Module scalar a) => a -> LinFunc Var scalar -> (Var -> a) -> a
+fromLinear' unit (Func m c) f = c *^ unit + fromSum (M.foldMapWithKey (\v k -> AC.Sum (k *^ f v)) m)
+
+substLinear :: Expr -> (Var -> Expr) -> Expr
+substLinear = fromLinear' (Func M.empty 1)
+
+rename :: (Var -> Var) -> Expr -> Expr
+rename f e = substLinear e (Linear.var . f)
 
 type Constant = Double
 
@@ -337,38 +338,47 @@ infix 4 <==,===,>==
 ----------------
 -- Expressions
 
+
 runDiagram :: Monad m => Backend lab m -> Diagram lab m a -> m a
 runDiagram backend diag = do
   let env = Env one defaultPathOptions backend
   (a,finalState,ds) <- runRWST (fromDia $ do x<-diag;resolveNonOverlaps;return x) env $
-    DiagramState (Var 0) [] (GExpr $ \_ -> zero) (M.empty) []
+    DiagramState (Var 0) [] zero (M.empty) []
   let reducedConstraints = M.fromList $ linSolve (finalState ^. diaLinConstraints)
-      varMap  x = M.findWithDefault (Var 0) x $ M.fromList (zip freeVars [Var 0..])
-      reducedConstraints' = fmap (rename varMap) reducedConstraints
       linSolvSubst v = case M.lookup v reducedConstraints of
-        Nothing -> var v
+        Nothing -> Linear.var v
         Just x -> x
+      solvSubst = fromLinear . linSolvSubst
       maxVar =  finalState ^. diaNextVar
-      -- fixedVarValues s = fmap (valueIn s) reducedConstraints
       freeVars = filter (\v -> M.notMember v reducedConstraints) [Var 0..maxVar]
-      objective :: forall s. Reifies s Tape => Vector (Reverse s Double) -> Reverse s Double
-      objective s =
-        let s' = M.union computed (M.fromList $ zip freeVars (toList s))
-            computed = fmap (valueIn (vAccess s)) reducedConstraints'
-        in fromGExpr (finalState ^. diaObjective) (valueIn' s')
+      varsToFreeVars' :: Map Var Int
+      varsToFreeVars' = M.fromList (zip freeVars [0..])
+      freeVarsToVars :: V.Vector Var
+      freeVarsToVars = V.fromList freeVars
+      obj0 :: GExpr
+      obj0 = finalState ^. diaObjective
+
+      obj' :: GExpr
+      obj' = AD.subst obj0 solvSubst
+      grad' env = (y,fmap (\v -> M.findWithDefault zero v dy) freeVarsToVars)
+         where D y dy = fromE obj' (\v -> maybe (error "not found") id (M.lookup v env') )
+               env' = M.mapWithKey (\v i -> D (env ! i) (M.singleton v 1)) varsToFreeVars'
       (solution,result,statistics) = unsafePerformIO $ do
        putStrLn $ "free vars: " ++ show freeVars
        putStrLn $ "reducedConstraints: " ++ show reducedConstraints
        putStrLn $ "optimizing ..."
-       opt <- optimize
+       opt@(s,_,_) <- HagerZhang05.optimize
         defaultParameters {verbose = VeryVerbose}
         0.01
         (V.replicate (length freeVars) 0)
-        objective
-       putStrLn $ "done!"
+        (VFunction (fst . grad')) (VGradient (snd . grad')) (Just (VCombined grad'))
+       putStrLn $ "done: "  ++ show (grad' (S.convert s))
        return opt
+      solution' = fmap (solution S.!) varsToFreeVars'
+      fullSolution = M.union solution' (fmap (valueIn solution') reducedConstraints)
 
-  forM_ ds (\(Freeze f x) -> f (fmap (valueIn (sAccess solution) . (`substLinear` (rename varMap . linSolvSubst))) x))
+  forM_ ds (\(Freeze f x) -> f (fmap (valueIn fullSolution) x))
+  -- (valueIn (sAccess solution) . (`substLinear` (rename varMap . linSolvSubst)))
   return a
 
 vAccess :: Vector x -> Var -> x
@@ -378,13 +388,8 @@ sAccess xs (Var ix) = xs S.! ix
 
 vAccess' xs ix = M.findWithDefault zero ix xs
 
--- | Value of an expression in the given solution
-valueIn :: (Mode t,Ring t) => (Var -> t) -> LinFunc Var (Scalar t) -> t
-valueIn sol (Func m c) = sum (auto c:[auto scale * sol v | (v,scale) <- M.assocs m])
-
--- | Value of an expression in the given solution
-valueIn' :: (Mode t,Ring t) => Map Var t -> Var -> t
-valueIn' sol v = M.findWithDefault 0 v sol
+valueIn :: Map Var Double -> Expr -> Double
+valueIn sol f = fromLinear' one f (\v -> M.findWithDefault 0 v sol)
 
 -- | Embed a variable in an expression
 variable :: Var -> Expr
@@ -420,8 +425,8 @@ e1 <== e2 = do
   let Func f c = e1 - e2
       isFalse = M.null f && c < 0
   when isFalse $ error "Diagrams.Core: inconsistent constraint!"
-  minimize' $ GExpr $ \s ->
-    let [v1,v2] = map (($ s) . fromGExpr . fromLinear) [e1,e2]
+  minimize' $ E $ \s ->
+    let [v1,v2] = map (($ s) . fromE . fromLinear) [e1,e2]
     in if v1 <= v2 then zero else square (square (v2-v1))
 
 square :: forall a. Multiplicative a => a -> a
@@ -463,7 +468,7 @@ minimize',maximize' :: Monad m => GExpr -> Diagram lab m ()
 maximize' = minimize' . negate
 minimize' f = do
   tightness <- view diaTightness
-  diaObjective %= \o -> fromRational tightness * f + o
+  diaObjective %= \o -> (fromRational tightness::Double) *^ f + o
 
 
 drawText :: Monad m => Point' Expr -> lab -> Diagram lab m BoxSpec
@@ -486,27 +491,14 @@ surface (Point x y) = x*y
 resolveNonOverlaps :: Monad m => Diagram lab m ()
 resolveNonOverlaps = do
   noOvl <- Dia $ use diaNoOverlaps
-  minimize' $ GExpr $ \s ->
-    sum $ do
+  minimize' $ E $ \s ->
+    add $ do
       pair <- allPairs noOvl
-      let (Pair bx1 bx2) = fmap (fmap (fmap (($ s) . fromGExpr))) pair
+      let (Pair bx1 bx2) = fmap (fmap (fmap (($ s) . fromE))) pair
           overlap = inters bx1 bx2
-      return $ if nonEmpty overlap then (square $ surface overlap) else 0
+      return $ if nonEmpty overlap then (square $ surface overlap) else zero
     where
       allPairs [] = []
       allPairs (x:xs) = [Pair x y | y <- xs] ++ allPairs xs
       inters (Pair p1 q1) (Pair p2 q2) = (min <$> q1 <*> q2) - (max <$> p1 <*> p2)
-      nonEmpty (Point a b) = a > 0 && b > 0
-
--- It uses reverse mode automatic differentiation to compute the gradient.
-optimize
-  :: Parameters  -- ^ How should we optimize.
-  -> Double      -- ^ @grad_tol@, see 'stopRules'.
-  -> Vector Double    -- ^ Initial guess.
-  -> (forall s. Reifies s Tape => Vector (Reverse s Double) -> Reverse s Double) -- ^ Function to be minimized.
-  -> IO (S.Vector Double, Result, Statistics)
-optimize params grad_tol initial f =
-  let vf = fst . grad' f
-      vg = grad f
-      vc = grad' f
-  in HagerZhang05.optimize params grad_tol initial (VFunction vf) (VGradient vg) (Just (VCombined vc))
+      nonEmpty (Point a b) = a > zero && b > zero

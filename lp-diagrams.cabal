@@ -28,6 +28,7 @@ library
                        Graphics.Diagrams.DerivationTrees,
                        Graphics.Diagrams
 
+                       Algebra.AD
                        Algebra.Linear
                        Algebra.Linear.GaussianElimination
   build-depends:       base >=4.8 && < 666,

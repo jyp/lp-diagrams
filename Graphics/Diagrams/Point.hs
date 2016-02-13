@@ -19,10 +19,10 @@ type Point = Point' Expr
 -- | Norm of a vector. Don't minimize this: the solver does not like functions
 -- with non-continuous derivatives (at zero in this case).
 norm :: Point' GExpr -> GExpr
-norm p = sqrt (sqNorm p)
+norm p = error "norm: TODO" -- sqrt (sqNorm p)
 
 normalize :: Point' GExpr -> Point' GExpr
-normalize x = (1/norm x) *^ x
+normalize x = error "normalize: TODO"-- (one/norm x) *^ x
 
 -- | Dot product
 dotProd :: forall a. (Ring a) => Point' a -> Point' a -> a
