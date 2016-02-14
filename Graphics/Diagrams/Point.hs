@@ -7,6 +7,7 @@ import Data.Foldable
 import Data.List (transpose)
 import Prelude hiding (sum,mapM_,mapM,concatMap,maximum,minimum,Num(..),(/))
 import Algebra.Classes
+import Algebra.AD (sqrtE)
 
 infix 4 .=.
 ----------------
@@ -19,10 +20,10 @@ type Point = Point' Expr
 -- | Norm of a vector. Don't minimize this: the solver does not like functions
 -- with non-continuous derivatives (at zero in this case).
 norm :: Point' GExpr -> GExpr
-norm p = error "norm: TODO" -- sqrt (sqNorm p)
+norm p = sqrtE (sqNorm p)
 
 normalize :: Point' GExpr -> Point' GExpr
-normalize x = error "normalize: TODO"-- (one/norm x) *^ x
+normalize x = (one/norm x) *^ x
 
 -- | Dot product
 dotProd :: forall a. (Ring a) => Point' a -> Point' a -> a

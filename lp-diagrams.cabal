@@ -25,6 +25,7 @@ library
                        Graphics.Diagrams.Plot,
                        Graphics.Diagrams.Point,
                        Graphics.Diagrams.Core,
+                       Graphics.Diagrams.Types,
                        Graphics.Diagrams.DerivationTrees,
                        Graphics.Diagrams
 
