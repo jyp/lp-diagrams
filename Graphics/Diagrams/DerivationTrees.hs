@@ -100,7 +100,7 @@ toDiagPart layerHeight (Link{..} ::> rul)
     let pt = ptObj # S
     pt `eastOf` (concl # W)
     pt `westOf` (concl # E)
-    fromLinear (xpart pt) =~= fromLinear (xpart (concl # Center))
+    (xpart pt) =~= (xpart (concl # Center))
     let top = ypart (concl # S)
     ypart pt + (fromIntegral steps *- layerHeight) === top
     using linkStyle $ path $ polyline [ptObj # Base,Point (xpart pt) top]
@@ -169,9 +169,9 @@ toDiagram layerHeight (Node Rule{..} premises) = do
   -- layout hints (not necessary for "correctness")
   let xd = xdiff (separ # W) (psGrp # W)
   xd   === xdiff (psGrp # E) (separ # E)
-  relax 2 $ fromLinear (2 *- xd) =~= fromLinear premisesDist
+  relax 2 $ (2 *- xd) =~= premisesDist
   -- centering of conclusion
-  relax 3 $ minimize' $ sqNorm $ fmap fromLinear $ (separ # Center) - (concl # Center)
+  relax 3 $ minimize $ sqNorm $ (separ # Center) - (concl # Center)
 
   -- draw the rule.
   using ruleStyle $ path $ polyline [separ # W,separ # E]

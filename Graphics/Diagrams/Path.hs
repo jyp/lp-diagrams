@@ -111,8 +111,8 @@ circlePath center r =
    CurveTo (pt (negate r) (negate k)) (pt (negate k) (negate r)) (pt zero (negate r)),
    CurveTo (pt k (negate r)) (pt r (negate k)) (pt r zero),
    Cycle]
- where k1 :: Constant
-       k1 = 4 * (sqrt 2 - 1) / 3
+ where k1 :: Expr
+       k1 = fromInteger 4 * (sqrtE (fromInteger 2) - (fromInteger 1)) / fromInteger 3
        k = k1 *^ r
        pt x y = center + (Point x y)
 

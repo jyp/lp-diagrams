@@ -29,11 +29,9 @@ library
                        Graphics.Diagrams.DerivationTrees,
                        Graphics.Diagrams
 
-                       Algebra.AD
                        Algebra.Linear
-                       Algebra.Linear.GaussianElimination
   build-depends:       base >=4.8 && < 666,
-                       ad,
+                       sbv,
                        lens >=4.12,
                        text >=1.2 ,
                        typography-geometry >=1.0 ,

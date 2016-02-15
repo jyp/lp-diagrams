@@ -8,7 +8,7 @@ import Graphics.Diagrams.Core
 import Control.Monad
 import Control.Lens (set,view)
 import Algebra.Classes hiding (normalize)
-import Prelude hiding (Num(..))
+import Prelude hiding (Num(..),(/))
 
 data Anchor = Center | N | NW | W | SW | S | SE | E | NE | BaseW | Base | BaseE
   deriving Show
@@ -229,14 +229,14 @@ insideBox p o = do
 -- vector.
 autoLabelObj :: Monad m => Box -> OVector -> Diagram lab m ()
 autoLabelObj lab (OVector pt v) = do
-  let normalVector :: Point' GExpr
-      normalVector = normalize $ fromLinear <$> v
+  let normalVector :: Point' Expr
+      normalVector = normalize v
   -- label must touch the point
   tighten 10 $ pt `insideBox` lab
   -- go as far as possible in the normal direction
-  maximize' $ dotProd (fromLinear <$> ((lab#Center) - pt)) normalVector
+  maximize $ dotProd (((lab#Center) - pt)) normalVector
   -- don't stray from the normal line
-  minimize' $ square $ dotProd (fromLinear <$> ((lab#Center) - pt)) (rotate90 normalVector)
+  minimize $ square $ dotProd (((lab#Center) - pt)) (rotate90 normalVector)
   --
 
 -- | @autoLabel o i@ Layouts the label object @o@ at the given incidence

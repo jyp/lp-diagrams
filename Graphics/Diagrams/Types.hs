@@ -24,7 +24,7 @@ infixr 7 *-
 
 -- | Average
 avg :: Module Constant a => [a] -> a
-avg xs = (1/fromIntegral (length xs)) *- add xs
+avg xs = (one/fromIntegral (length xs)::Constant) *^ add xs
 
 ------------
 -- Types

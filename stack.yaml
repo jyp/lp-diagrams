@@ -1,7 +1,7 @@
 # For more information, see: https://github.com/commercialhaskell/stack/blob/release/doc/yaml_configuration.md
 
 # Specifies the GHC version and set of packages available (e.g., lts-3.5, nightly-2015-09-21, ghc-7.10.2)
-resolver: lts-3.20
+resolver: lts-5.1
 
 # Local packages, usually specified by relative directory name
 packages:
@@ -12,10 +12,6 @@ packages:
 extra-deps:
 - graphviz-2999.18.0.2
 - labeled-tree-1.0.0.0
-- polynomials-bernstein-1.1.1
-- typography-geometry-1.0.0.1
-- nonlinear-optimization-ad-0.2.1
-- nonlinear-optimization-0.3.10
 
 # Override default flag values for local packages and extra-deps
 flags: {}
@@ -25,9 +21,6 @@ extra-package-dbs: []
 
 # Control whether we use the GHC we find on the path
 # system-ghc: true
-
-nix:
-  enable: true
 
 
 # Require a specific version of stack, using version ranges
