@@ -60,12 +60,6 @@ rename f e = substLinear e (Linear.var . f)
 data Freeze m where
   Freeze :: forall t m. Functor t => (t Constant -> m ()) -> t Expr -> Freeze m
 
-data Pair a = Pair a a
-  deriving (Functor)
-
-instance Show a => Show (Pair a) where
-  show (Pair x y) = show (x,y)
-
 data DiagramState = DiagramState
   {_diaNextVar :: Var
   ,_diaLinConstraints :: [Constraint Var Constant]

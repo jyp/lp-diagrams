@@ -70,14 +70,3 @@ alignMatrix :: Monad m => [[Point]] -> Diagram lab m ()
 alignMatrix ls = do
   forM_ ls alignHoriz
   forM_ (transpose ls) alignVert
-
----------------------
--- Point objectives
-
-{-
-southwards, northwards, westwards, eastwards :: Monad m => Point -> Diagram lab m ()
-southwards (Point _ y) = minimize y
-westwards (Point x _) = minimize x
-northwards = southwards . negate
-eastwards = westwards . negate
--}

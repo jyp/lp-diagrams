@@ -29,6 +29,12 @@ avg xs = (1/fromIntegral (length xs)) *- add xs
 ------------
 -- Types
 
+data Pair a = Pair {pairFst :: a, pairSnd :: a}
+  deriving (Functor)
+
+instance Show a => Show (Pair a) where
+  show (Pair x y) = show (x,y)
+
 data Point' a = Point {xpart :: a, ypart :: a}
   deriving (Eq,Show,Functor)
 
