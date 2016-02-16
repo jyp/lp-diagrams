@@ -1,4 +1,4 @@
-{-# LANGUAGE TypeSynonymInstances, FlexibleContexts, FlexibleInstances, GeneralizedNewtypeDeriving, MultiParamTypeClasses, RecursiveDo, TypeFamilies, OverloadedStrings, RecordWildCards,UndecidableInstances, PackageImports, TemplateHaskell, RankNTypes, GADTs, ImpredicativeTypes, DeriveFunctor, ScopedTypeVariables, ConstraintKinds #-}
+{-# LANGUAGE TypeSynonymInstances, FlexibleContexts, FlexibleInstances, GeneralizedNewtypeDeriving, MultiParamTypeClasses, RecursiveDo, TypeFamilies, OverloadedStrings, RecordWildCards,UndecidableInstances, PackageImports, TemplateHaskell, RankNTypes, GADTs, ImpredicativeTypes, DeriveFunctor, ScopedTypeVariables, ConstraintKinds, OverloadedStrings #-}
 
 module Graphics.Diagrams.Core (
   module Graphics.Diagrams.Types,
@@ -22,24 +22,41 @@ import Data.Traversable
 import Data.Foldable
 import System.IO.Unsafe
 import Graphics.Diagrams.Types
-import Data.SBV hiding (minimize,maximize,(===))
-import qualified Data.SBV
-
+import Data.List (intercalate)
+import Data.String
 -- | Expressions are linear functions of the variables
-type SBVEnv = Map Var (SConstant)
-
-type SConstant = SBV AlgReal
 
 newtype Var = Var Int
   deriving (Ord,Eq,Show,Enum)
 
+class IsDouble a where
+  fromDouble :: Double -> a
+  sqrtE :: a -> a
+
 instance IsDouble Constant where
   fromDouble = id
+  sqrtE = sqrt
 
-instance IsDouble (SConstant) where
-  fromDouble = fromSDouble sRNE . literal
 
--- | A non-linear expression.
+newtype SConstant = S {fromS :: String}
+
+instance IsString SConstant where
+  fromString = S
+
+parens (x) = "(" ++ x ++ ")"
+sexp (xs) = S $ parens $ intercalate " " $ map fromS xs
+binop s x y = sexp [S s,x,y]
+unop s x = sexp [S s,x]
+
+instance IsDouble Expr where
+  fromDouble d = E (R $ \_ -> fromDouble d)
+  sqrtE (E x) = E (sqrtE x)
+
+instance IsDouble SConstant where
+  fromDouble x = S $ show x
+  sqrtE x = sexp [S "sqrt",x]
+
+--- | A non-linear expression.
 newtype R env y = R {fromR :: env -> y}
   deriving Functor
 instance Applicative (R env) where
@@ -51,6 +68,7 @@ liftA2 :: forall (f :: * -> *) a b a1.
 liftA2 f x y = f <$> x <*> y
 instance IsDouble x => IsDouble (R env x) where
   fromDouble x = pure (fromDouble x)
+  sqrtE = fmap sqrtE
 instance Additive x => Additive (R env x) where
   zero = pure zero
   (+) = liftA2 (+)
@@ -69,28 +87,20 @@ instance Group x => Group (R env x) where
   negate = fmap negate
   (-) = liftA2 (-)
 instance Multiplicative (SConstant) where
-  (*) = (Prelude.*)
-  one = 1
+  (*) = binop "*"
+  one = S "1"
 instance Division (SConstant) where
-  (/) = (Prelude./)
+  (/) = binop "/"
 instance Additive (SConstant) where
-  (+) = (Prelude.+)
-  zero = 0
+  (+) = binop "+"
+  zero = S "0"
 instance AbelianAdditive (SConstant)
 instance Field (SConstant)
 instance Ring (SConstant)
 instance Group (SConstant) where
-  (-) = (Prelude.-)
-  negate = Prelude.negate
+  (-) = binop "-"
 
-sqrtE :: Expr -> Expr
-sqrtE f = E (R (\rho -> id {- fixme ! -} (fromR (fromE f) rho)))
-
-type Constraint = R SBVEnv (SBV Bool)
-newtype Expr = E {fromE :: forall x. (Field x,IsDouble x,Prelude.Num x) => R (Map Var x) x}
-
-class IsDouble d where
-  fromDouble :: Double -> d
+newtype Expr = E {fromE :: forall x. (Field x,IsDouble x) => R (Var -> x) x}
 
 instance Additive Expr where
   zero = E zero
@@ -116,6 +126,7 @@ instance Module Expr Expr where
 data Freeze m where
   Freeze :: forall t m. Functor t => (t Constant -> m ()) -> t Expr -> Freeze m
 
+type Constraint = SConstant
 data DiagramState = DiagramState
   {_diaNextVar :: Var
   ,_diaLinConstraints :: [Constraint]
@@ -166,24 +177,29 @@ infix 4 <==,===,>==
 ----------------
 -- Expressions
 
+renderExpr :: Expr -> SConstant
+renderExpr (E (R x)) = x vv
 
 runDiagram :: Monad m => Backend lab m -> Diagram lab m a -> m a
 runDiagram backend diag = do
   let env = Env one defaultPathOptions backend
-  (a,finalState,ds) <- runRWST (fromDia $ do x<-diag;{-resolveNonOverlaps-};return x) env $
+  (a,finalState,ds) <- runRWST (fromDia $ do x<-diag;resolveNonOverlaps;return x) env $
     DiagramState (Var 0) [] zero (M.empty) []
-  let Var maxVar =  finalState ^. diaNextVar
-      mkEnv :: [a] -> Map Var a
-      mkEnv xs = M.fromList $ zip [Var 0..] xs
-      obj :: [SConstant] -> SConstant
-      obj rho = (fromR (fromE (finalState ^. diaObjective))) (mkEnv rho)
-      constr :: [SConstant] -> SBV Bool
-      constr rho = bAll id (map (\(R f) -> f rho') (finalState ^. diaLinConstraints))
-        where rho'= mkEnv rho
+  let maxVar =  finalState ^. diaNextVar
+      -- obj :: [SConstant] -> SConstant
+      -- obj rho = (fromR (fromE (finalState ^. diaObjective))) (mkEnv rho)
+      decls = [sexp [S "declare-const", vv x, S "Real"] | x <- [Var 0 .. maxVar]]
+      constrs = intercalate "\n" $ map fromS $
+        decls ++
+        (finalState ^. diaLinConstraints) ++
+        [ sexp ["minimize", renderExpr (finalState ^. diaObjective)],
+          sexp ["check-sat"],
+          sexp ["get-model"]
+          ]
       solution = unsafePerformIO $ do
-       msol <- Data.SBV.minimize (Iterative True) obj maxVar  constr
-       case msol of
-         Just xs -> return $ fmap (fromRational . toRational) $ mkEnv xs
+        writeFile "test.smt" $ constrs
+        -- msol <- sat (forSome )
+        return $ error "runDiagram: awoufytaw"
 
   forM_ ds (\(Freeze f x) -> f (fmap (\(E (R g)) -> g solution) x))
   return a
@@ -191,7 +207,7 @@ runDiagram backend diag = do
 
 -- | Embed a variable in an expression
 variable :: Var -> Expr
-variable v = E (R $ \rho -> M.findWithDefault (error "variable not found in env") v rho)
+variable v = E (R $ \rho -> rho v)
 
 -- | Embed a constant in an expression
 constant :: Double -> Expr
@@ -210,13 +226,15 @@ minimVar = satAll "minimum of" (<==)
 
 --------------
 -- Expression constraints
+
+vv (Var x) = S ("x" ++ show x)
 (===), (>==), (<==) :: Expr -> Expr -> Monad m => Diagram lab m ()
-E (R e1) <== (E (R e2)) = diaLinConstraints %= (R (\rho -> e1 rho .<= e2 rho ):)
+E (R e1) <== (E (R e2)) = diaLinConstraints %= (sexp [S "assert", sexp [S "<=", e1 vv, e2 vv]]:)
 
 
 (>==) = flip (<==)
 
-E (R e1) === (E (R e2)) = diaLinConstraints %= (R (\rho -> e1 rho .== e2 rho ):)
+E (R e1) === (E (R e2)) = diaLinConstraints %= (sexp [S "assert", sexp [S "=", e1 vv, e2 vv]]:)
 
 -- | minimize the distance between expressions
 (=~=) :: Monad m => Expr -> Expr -> Diagram lab m ()
@@ -246,6 +264,29 @@ diaRaw = Dia . lift
 
 registerNonOverlap :: Monad m => Point' Expr -> Point' Expr -> Diagram lab m ()
 registerNonOverlap nw se = Dia $ diaNoOverlaps %= (Pair nw se:)
+
+allPairs [] = []
+allPairs (x:xs) = [Pair x y | y <- xs] ++ allPairs xs
+
+resolveNonOverlaps :: Monad m => Diagram lab m ()
+resolveNonOverlaps = Dia $ do
+  noOvl <- use diaNoOverlaps
+  forM_ (allPairs noOvl) $ \(Pair (Pair p1 q1) (Pair p2 q2)) -> do
+    notInside p1 (Pair p2 q2)
+    notInside q1 (Pair p2 q2)
+    notInside p2 (Pair p1 q1)
+    notInside q2 (Pair p1 q1)
+
+notInside p (Pair a b) = diaLinConstraints %=
+  (unop "assert" (unop "not" (binop "and" (a .<=. p) (p .<=. a))):)
+
+(.<=.) :: Point' Expr -> Point' Expr -> Constraint
+a .<=. b = foldPoint (binop "and") ((.<=) <$> a <*> b)
+
+(.<=) :: Expr -> Expr -> Constraint
+x .<= y = binop "<=" (renderExpr x) (renderExpr y)
+
+foldPoint f (Point x y) = f x y
 
 {-
 surface :: forall a. Multiplicative a => Point' a -> a
