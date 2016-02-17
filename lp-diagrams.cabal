@@ -28,6 +28,7 @@ library
                        Graphics.Diagrams.Types,
                        Graphics.Diagrams.DerivationTrees,
                        Graphics.Diagrams
+  other-modules:       SMT.Model
 
                        Algebra.Linear
   build-depends:       base >=4.8 && < 666,
@@ -42,5 +43,7 @@ library
                        polynomials-bernstein,
                        mtl >=2.2 ,
                        containers >=0.5,
-                       labeled-tree
+                       labeled-tree,
+                       parsek,
+                       process
   default-language:    Haskell2010

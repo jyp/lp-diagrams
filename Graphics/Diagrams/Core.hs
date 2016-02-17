@@ -22,8 +22,11 @@ import Data.Traversable
 import Data.Foldable
 import System.IO.Unsafe
 import Graphics.Diagrams.Types
-import Data.List (intercalate)
+import Data.List (isPrefixOf,intercalate)
 import Data.String
+import System.Process
+import SMT.Model
+
 -- | Expressions are linear functions of the variables
 
 newtype Var = Var Int
@@ -198,10 +201,14 @@ runDiagram backend diag = do
           ]
       solution = unsafePerformIO $ do
         writeFile "test.smt" $ constrs
-        -- msol <- sat (forSome )
-        return $ error "runDiagram: awoufytaw"
+        _exitCode <- system "z3 -smt2 test.smt > result"
+        res <- readFile "result"
+        let modelText = unlines . dropWhile (not . ("(model" `isPrefixOf`)) . lines $ res
+        case readModel modelText of
+          Right model -> return $ M.fromList model
+      lkMod m (Var v) = M.findWithDefault (error "variable not in model") v m
 
-  forM_ ds (\(Freeze f x) -> f (fmap (\(E (R g)) -> g solution) x))
+  forM_ ds (\(Freeze f x) -> f (fmap (\(E (R g)) -> g (lkMod solution)) x))
   return a
 
 
