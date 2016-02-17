@@ -246,6 +246,26 @@ diaRaw = Dia . lift
 
 registerNonOverlap :: Monad m => Point' Expr -> Point' Expr -> Diagram lab m ()
 registerNonOverlap nw se = Dia $ diaNoOverlaps %= (Pair nw se:)
+resolveNonOverlaps :: Monad m => Diagram lab m ()
+resolveNonOverlaps = Dia $ do
+
+  noOvl <- use diaNoOverlaps
+  forM_ (allPairs noOvl) $ \(Pair (Pair p1 q1) (Pair p2 q2)) -> do
+    notInside p1 (Pair p2 q2)
+    notInside q1 (Pair p2 q2)
+    notInside p2 (Pair p1 q1)
+    notInside q2 (Pair p1 q1)
+
+notInside p (Pair a b) = diaLinConstraints %=
+  (unop "assert" (unop "not" (binop "and" (a .<=. p) (p .<=. a))):)
+
+(.<=.) :: Point' Expr -> Point' Expr -> Constraint
+a .<=. b = foldPoint (binop "and") ((.<=) <$> a <*> b)
+
+(.<=) :: Expr -> Expr -> Constraint
+x .<= y = binop "<=" (renderExpr x) (renderExpr y)
+
+foldPoint f (Point x y) = f x y
 
 {-
 surface :: forall a. Multiplicative a => Point' a -> a
