@@ -1,6 +1,7 @@
 module SMT.Model (readModel) where
 
 import Text.ParserCombinators.Parsek.Position
+import Data.Char (isSpace)
 
 data SExpr = Atom String | S [SExpr]
 
@@ -31,21 +32,20 @@ parseNeg = do
   x <- parseValue
   return (negate x)
 
-parseAssoc :: P (Int,Double)
+parseAssoc :: P (String,Double)
 parseAssoc = parens $ do
   tok "define-fun"
   spaces
-  char 'x'
-  v <- many1 digit
+  v <- many1 (satisfy (not . isSpace))
   parens (return ())
   tok "Real"
   x <- parseValue
-  return (read v,x)
+  return (v,x)
 
 parens = between (tok "(") (tok")")
 parseModel = parens $ do
   tok "model"
   many parseAssoc
 
-readModel :: String -> ParseResult SourcePos [(Int, Double)]
+readModel :: String -> ParseResult SourcePos [(String, Double)]
 readModel = parse "<model>" parseModel longestResult

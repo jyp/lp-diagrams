@@ -230,13 +230,14 @@ insideBox p o = do
 autoLabelObj :: Monad m => Box -> OVector -> Diagram lab m ()
 autoLabelObj lab (OVector pt v) = do
   let normalVector :: Point' Expr
-      normalVector = normalize v
+      normalVector = v
   -- label must touch the point
   tighten 10 $ pt `insideBox` lab
+  minimize (orthonorm (pt+v- lab#Center))
   -- go as far as possible in the normal direction
-  maximize $ dotProd (((lab#Center) - pt)) normalVector
-  -- don't stray from the normal line
-  minimize $ square $ dotProd (((lab#Center) - pt)) (rotate90 normalVector)
+  -- maximize $ dotProd (((lab#Center) - pt)) normalVector
+  -- don't stray away from the normal line
+  -- minimize $ absE $ dotProd (((lab#Center) - pt)) (rotate90 normalVector)
   --
 
 -- | @autoLabel o i@ Layouts the label object @o@ at the given incidence

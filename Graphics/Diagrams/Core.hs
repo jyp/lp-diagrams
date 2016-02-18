@@ -2,7 +2,7 @@
 
 module Graphics.Diagrams.Core (
   module Graphics.Diagrams.Types,
-  Expr, constant, sqrtE, newVars,
+  Expr, constant, absE, sqrtE, newVars,
   minimize, maximize,
   (===), (>==), (<==), (=~=),
   Diagram(..), runDiagram,
@@ -35,10 +35,12 @@ newtype Var = Var Int
 class IsDouble a where
   fromDouble :: Double -> a
   sqrtE :: a -> a
+  absE :: a -> a
 
 instance IsDouble Constant where
   fromDouble = id
   sqrtE = sqrt
+  absE = Prelude.abs
 
 
 newtype SConstant = S {fromS :: String}
@@ -54,10 +56,12 @@ unop s x = sexp [S s,x]
 instance IsDouble Expr where
   fromDouble d = E (R $ \_ -> fromDouble d)
   sqrtE (E x) = E (sqrtE x)
+  absE (E x) = E (absE x)
 
 instance IsDouble SConstant where
   fromDouble x = S $ show x
-  sqrtE x = sexp [S "sqrt",x]
+  sqrtE x = binop "^" x "0.5"
+  absE = unop "abs"
 
 --- | A non-linear expression.
 newtype R env y = R {fromR :: env -> y}
@@ -72,6 +76,7 @@ liftA2 f x y = f <$> x <*> y
 instance IsDouble x => IsDouble (R env x) where
   fromDouble x = pure (fromDouble x)
   sqrtE = fmap sqrtE
+  absE = fmap absE
 instance Additive x => Additive (R env x) where
   zero = pure zero
   (+) = liftA2 (+)
@@ -101,6 +106,7 @@ instance AbelianAdditive (SConstant)
 instance Field (SConstant)
 instance Ring (SConstant)
 instance Group (SConstant) where
+  negate = unop "-"
   (-) = binop "-"
 
 newtype Expr = E {fromE :: forall x. (Field x,IsDouble x) => R (Var -> x) x}
@@ -206,7 +212,9 @@ runDiagram backend diag = do
         let modelText = unlines . dropWhile (not . ("(model" `isPrefixOf`)) . lines $ res
         case readModel modelText of
           Right model -> return $ M.fromList model
-      lkMod m (Var v) = M.findWithDefault (error "variable not in model") v m
+          Left err -> do print err
+                         error "die."
+      lkMod m (Var v) = M.findWithDefault (error "variable not in model") ("x"++show v) m
 
   forM_ ds (\(Freeze f x) -> f (fmap (\(E (R g)) -> g (lkMod solution)) x))
   return a

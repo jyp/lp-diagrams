@@ -16,6 +16,9 @@ infix 4 .=.
 
 type Point = Point' Expr
 
+orthonorm :: Point -> Expr
+orthonorm (Point x y) = absE x + absE y
+
 -- | Norm of a vector. Don't minimize this: the solver does not like functions
 -- with non-continuous derivatives (at zero in this case).
 norm :: Point' Expr -> Expr
