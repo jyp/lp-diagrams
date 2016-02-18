@@ -244,7 +244,7 @@ minimVar = satAll "minimum of" (<==)
 
 vv (Var x) = S ("x" ++ show x)
 (===), (>==), (<==) :: Expr -> Expr -> Monad m => Diagram lab m ()
-E (R e1) <== (E (R e2)) = diaLinConstraints %= (sexp [S "assert", sexp [S "<=", e1 vv, e2 vv]]:)
+e1 <== e2 = assert (e1 .<= e2)
 
 
 (>==) = flip (<==)
@@ -283,7 +283,7 @@ registerNonOverlap nw se = Dia $ diaNoOverlaps %= (Pair nw se:)
 allPairs [] = []
 allPairs (x:xs) = [Pair x y | y <- xs] ++ allPairs xs
 
-resolveNonOverlaps :: Monad m => Diagram lab m ()
+{-resolveNonOverlaps :: Monad m => Diagram lab m ()
 resolveNonOverlaps = Dia $ do
   noOvl <- use diaNoOverlaps
   forM_ (allPairs noOvl) $ \(Pair (Pair p1 q1) (Pair p2 q2)) -> do
@@ -295,30 +295,19 @@ resolveNonOverlaps = Dia $ do
 notInside p (Pair a b) = diaLinConstraints %=
   (unop "assert" (unop "not" (binop "and" (a .<=. p) (p .<=. a))):)
 
-(.<=.) :: Point' Expr -> Point' Expr -> Constraint
-a .<=. b = foldPoint (binop "and") ((.<=) <$> a <*> b)
+-}
 
 (.<=) :: Expr -> Expr -> Constraint
 x .<= y = binop "<=" (renderExpr x) (renderExpr y)
 
-foldPoint f (Point x y) = f x y
 
-{-
-surface :: forall a. Multiplicative a => Point' a -> a
-surface (Point x y) = x*y
+assert x = diaLinConstraints %= (unop "assert" x:)
+
 
 resolveNonOverlaps :: Monad m => Diagram lab m ()
 resolveNonOverlaps = do
   noOvl <- Dia $ use diaNoOverlaps
-  minimize' $ E $ \s ->
-    add $ do
-      pair <- allPairs noOvl
-      let (Pair bx1 bx2) = fmap (fmap (fmap (($ s) . fromE))) pair
-          overlap = inters bx1 bx2
-      return $ if nonEmpty overlap then (square $ surface overlap) else zero
-    where
-      allPairs [] = []
-      allPairs (x:xs) = [Pair x y | y <- xs] ++ allPairs xs
-      inters (Pair p1 q1) (Pair p2 q2) = (min <$> q1 <*> q2) - (max <$> p1 <*> p2)
-      nonEmpty (Point a b) = a > zero && b > zero
--}
+  forM_ (allPairs noOvl) $ \p -> do
+    assert (binop "or" (disj (ffmap xpart p)) (disj (ffmap ypart p)))
+ where disj (Pair (Pair p1 q1) (Pair p2 q2)) = binop "or" (q1 .<= p2) (q2 .<= p1)
+       ffmap f = fmap (fmap f)
