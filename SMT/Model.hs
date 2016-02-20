@@ -3,8 +3,6 @@ module SMT.Model (readModel) where
 import Text.ParserCombinators.Parsek.Position
 import Data.Char (isSpace)
 
-data SExpr = Atom String | S [SExpr]
-
 type P a = Parser a
 
 tok :: String -> P ()

@@ -2,7 +2,7 @@
 
 module Graphics.Diagrams.Core (
   module Graphics.Diagrams.Types,
-  Expr, constant, absE, sqrtE, newVars,
+  Expr, constant, absE, newVars,
   minimize, maximize,
   (===), (>==), (<==), (=~=),
   Diagram(..), runDiagram,
@@ -34,37 +34,19 @@ newtype Var = Var Int
 
 class IsDouble a where
   fromDouble :: Double -> a
-  sqrtE :: a -> a
+  -- sqrtE :: a -> a
   absE :: a -> a
 
 instance IsDouble Constant where
   fromDouble = id
-  sqrtE = sqrt
+  -- sqrtE = sqrt
   absE = Prelude.abs
 
+-- | S-Expression represented as strings
+newtype SExpr = S {fromS :: String}
 
-newtype SConstant = S {fromS :: String}
-
-instance IsString SConstant where
-  fromString = S
-
-parens (x) = "(" ++ x ++ ")"
-sexp (xs) = S $ parens $ intercalate " " $ map fromS xs
-binop s x y = sexp [S s,x,y]
-unop s x = sexp [S s,x]
-
-instance IsDouble Expr where
-  fromDouble d = E (R $ \_ -> fromDouble d)
-  sqrtE (E x) = E (sqrtE x)
-  absE (E x) = E (absE x)
-
-instance IsDouble SConstant where
-  fromDouble x = S $ show x
-  sqrtE x = binop "^" x "0.5"
-  absE = unop "abs"
-
---- | A non-linear expression.
-newtype R env y = R {fromR :: env -> y}
+-- Generic environment
+newtype R env y = R {_fromR :: env -> y}
   deriving Functor
 instance Applicative (R env) where
   pure x = R (\_ -> x)
@@ -75,7 +57,7 @@ liftA2 :: forall (f :: * -> *) a b a1.
 liftA2 f x y = f <$> x <*> y
 instance IsDouble x => IsDouble (R env x) where
   fromDouble x = pure (fromDouble x)
-  sqrtE = fmap sqrtE
+  -- sqrtE = fmap sqrtE
   absE = fmap absE
 instance Additive x => Additive (R env x) where
   zero = pure zero
@@ -94,52 +76,40 @@ instance Field x => Field (R env x) where
 instance Group x => Group (R env x) where
   negate = fmap negate
   (-) = liftA2 (-)
-instance Multiplicative (SConstant) where
-  (*) = binop "*"
-  one = S "1"
-instance Division (SConstant) where
-  (/) = binop "/"
-instance Additive (SConstant) where
-  (+) = binop "+"
-  zero = S "0"
-instance AbelianAdditive (SConstant)
-instance Field (SConstant)
-instance Ring (SConstant)
-instance Group (SConstant) where
-  negate = unop "-"
-  (-) = binop "-"
 
-newtype Expr = E {fromE :: forall x. (Field x,IsDouble x) => R (Var -> x) x}
+newtype Expr = E {_fromE :: forall x. (Field x,IsDouble x) => R (Var -> x) x}
 
 instance Additive Expr where
   zero = E zero
   E x + E y = E (x+y)
 instance Group Expr where
   E x - E y = E (x-y)
-instance Multiplicative Expr where
-  one = E one
-  E x * E y = E (x*y)
-instance Division Expr where
-  E x / E y = E (x/y)
+-- Not a decidable theory: avoid.
+-- instance Multiplicative Expr where
+--   one = E one
+--   E x * E y = E (x*y)
+-- instance Division Expr where
+--   E x / E y = E (x/y)
+-- instance Ring Expr
+-- instance Field Expr
+-- instance Module Expr Expr where
+--   (*^) = (*)
 instance AbelianAdditive Expr
-instance Ring Expr
-instance Field Expr
 instance Module Rational Expr where
   k *^ E x = E (fromRational k*x)
 instance Module Constant Expr where
   k *^ E x = E (fromDouble k*x)
-instance Module Expr Expr where
-  (*^) = (*)
 
 -- | Some action to perform after a solution has been found.
 data Freeze m where
   Freeze :: forall t m. Functor t => (t Constant -> m ()) -> t Expr -> Freeze m
 
-type Constraint = SConstant
+type Constraint = SExpr
+
 data DiagramState = DiagramState
-  {_diaNextVar :: Var
+  {_diaNextVar :: Var  -- ^ next var to allocate
   ,_diaLinConstraints :: [Constraint]
-  ,_diaObjective :: Expr
+  ,_diaObjective :: Expr -- ^ objective function
   ,_diaVarNames :: Map Var String
   ,_diaNoOverlaps :: [Pair (Point' Expr)]
   }
@@ -160,7 +130,7 @@ freeze x f = tell [Freeze (\y -> (f y)) x]
 
 -- | Relax the optimisation functions by the given factor
 relax :: Monad m => Rational -> Diagram lab m a -> Diagram lab m a
-relax factor = tighten (one/factor)
+relax factor = tighten (recip factor)
 
 -- | Tighten the optimisation functions by the given factor
 tighten :: Monad m => Rational -> Diagram lab m a -> Diagram lab m a
@@ -186,29 +156,24 @@ infix 4 <==,===,>==
 ----------------
 -- Expressions
 
-renderExpr :: Expr -> SConstant
-renderExpr (E (R x)) = x vv
-
 runDiagram :: Monad m => Backend lab m -> Diagram lab m a -> m a
 runDiagram backend diag = do
   let env = Env one defaultPathOptions backend
   (a,finalState,ds) <- runRWST (fromDia $ do x<-diag;resolveNonOverlaps;return x) env $
     DiagramState (Var 0) [] zero (M.empty) []
   let maxVar =  finalState ^. diaNextVar
-      -- obj :: [SConstant] -> SConstant
-      -- obj rho = (fromR (fromE (finalState ^. diaObjective))) (mkEnv rho)
-      decls = [sexp [S "declare-const", vv x, S "Real"] | x <- [Var 0 .. maxVar]]
+      decls = [sexp ["declare-const", smtVar x, "Real"] | x <- [Var 0 .. maxVar]]
       constrs = intercalate "\n" $ map fromS $
         decls ++
-        (finalState ^. diaLinConstraints) ++
-        [ sexp ["minimize", renderExpr (finalState ^. diaObjective)],
+        (unop "assert" <$> (finalState ^. diaLinConstraints)) ++
+        [ unop "minimize" (renderExpr (finalState ^. diaObjective)),
           sexp ["check-sat"],
           sexp ["get-model"]
-          ]
+        ]
       solution = unsafePerformIO $ do
-        writeFile "test.smt" $ constrs
-        _exitCode <- system "z3 -smt2 test.smt > result"
-        res <- readFile "result"
+        writeFile "problem.smt2" $ constrs
+        _exitCode <- system "z3 -smt2 problem.smt2 > result.smt2"
+        res <- readFile "result.smt2"
         let modelText = unlines . dropWhile (not . ("(model" `isPrefixOf`)) . lines $ res
         case readModel modelText of
           Right model -> return $ M.fromList model
@@ -242,18 +207,14 @@ minimVar = satAll "minimum of" (<==)
 --------------
 -- Expression constraints
 
-vv (Var x) = S ("x" ++ show x)
 (===), (>==), (<==) :: Expr -> Expr -> Monad m => Diagram lab m ()
 e1 <== e2 = assert (e1 .<= e2)
-
-
 (>==) = flip (<==)
-
-E (R e1) === (E (R e2)) = diaLinConstraints %= (sexp [S "assert", sexp [S "=", e1 vv, e2 vv]]:)
+e1 === e2 = assert (e1 .== e2)
 
 -- | minimize the distance between expressions
 (=~=) :: Monad m => Expr -> Expr -> Diagram lab m ()
-x =~= y = minimize $ square (x-y)
+x =~= y = minimize $ absE (x-y)
 
 -------------------------
 -- Expression objectives
@@ -280,34 +241,71 @@ diaRaw = Dia . lift
 registerNonOverlap :: Monad m => Point' Expr -> Point' Expr -> Diagram lab m ()
 registerNonOverlap nw se = Dia $ diaNoOverlaps %= (Pair nw se:)
 
+allPairs :: forall a. [a] -> [Pair a]
 allPairs [] = []
 allPairs (x:xs) = [Pair x y | y <- xs] ++ allPairs xs
 
-{-resolveNonOverlaps :: Monad m => Diagram lab m ()
-resolveNonOverlaps = Dia $ do
-  noOvl <- use diaNoOverlaps
-  forM_ (allPairs noOvl) $ \(Pair (Pair p1 q1) (Pair p2 q2)) -> do
-    notInside p1 (Pair p2 q2)
-    notInside q1 (Pair p2 q2)
-    notInside p2 (Pair p1 q1)
-    notInside q2 (Pair p1 q1)
 
-notInside p (Pair a b) = diaLinConstraints %=
-  (unop "assert" (unop "not" (binop "and" (a .<=. p) (p .<=. a))):)
-
--}
-
-(.<=) :: Expr -> Expr -> Constraint
-x .<= y = binop "<=" (renderExpr x) (renderExpr y)
-
-
-assert x = diaLinConstraints %= (unop "assert" x:)
-
+assert :: Monad m => SExpr -> Diagram lab m ()
+assert x = diaLinConstraints %= (x:)
 
 resolveNonOverlaps :: Monad m => Diagram lab m ()
 resolveNonOverlaps = do
   noOvl <- Dia $ use diaNoOverlaps
   forM_ (allPairs noOvl) $ \p -> do
-    assert (binop "or" (disj (ffmap xpart p)) (disj (ffmap ypart p)))
- where disj (Pair (Pair p1 q1) (Pair p2 q2)) = binop "or" (q1 .<= p2) (q2 .<= p1)
+    assert (disj (ffmap xpart p) .|| disj (ffmap ypart p))
+ where disj (Pair (Pair p1 q1) (Pair p2 q2)) = (q1 .<= p2) .|| (q2 .<= p1)
        ffmap f = fmap (fmap f)
+
+
+---------------------------------
+-- Constraint & SExpr utils
+
+(.<=),(.==) :: Expr -> Expr -> Constraint
+x .<= y = binop "<=" (renderExpr x) (renderExpr y)
+
+x .== y = binop "=" (renderExpr x) (renderExpr y)
+
+(.||) :: Constraint -> Constraint -> Constraint
+(.||) = binop "or"
+
+renderExpr :: Expr -> SExpr
+renderExpr (E (R x)) = x smtVar
+
+smtVar :: Var -> SExpr
+smtVar (Var x) = S ("x" ++ show x)
+
+parens :: forall a. IsString [a] => [a] -> [a]
+parens x = "(" ++ x ++ ")"
+sexp :: [SExpr] -> SExpr
+sexp xs = S $ parens $ intercalate " " $ map fromS xs
+binop :: String -> SExpr -> SExpr -> SExpr
+binop s x y = sexp [S s,x,y]
+unop :: String -> SExpr -> SExpr
+unop s x = sexp [S s,x]
+instance Multiplicative (SExpr) where
+  (*) = binop "*"
+  one = S "1"
+instance Division (SExpr) where
+  (/) = binop "/"
+instance Additive (SExpr) where
+  (+) = binop "+"
+  zero = S "0"
+instance AbelianAdditive (SExpr)
+instance Field (SExpr)
+instance Ring (SExpr)
+instance Group (SExpr) where
+  negate = unop "-"
+  (-) = binop "-"
+instance IsString SExpr where
+  fromString = S
+
+instance IsDouble Expr where
+  fromDouble d = E (R $ \_ -> fromDouble d)
+  -- sqrtE (E x) = E (sqrtE x)
+  absE (E x) = E (absE x)
+
+instance IsDouble SExpr where
+  fromDouble x = S $ show x
+  -- sqrtE x = binop "^" x "0.5"
+  absE = unop "abs"
