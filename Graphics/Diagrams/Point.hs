@@ -19,6 +19,9 @@ type Point = Point' Expr
 orthonorm :: Point -> Expr
 orthonorm (Point x y) = absE x + absE y
 
+{-
+
+
 -- | Norm of a vector. Don't minimize this: the solver does not like functions
 -- with non-continuous derivatives (at zero in this case).
 norm :: Point' Expr -> Expr
@@ -34,14 +37,14 @@ dotProd (Point x y) (Point x' y') = x*x' + y*y'
 -- | Squared norm of a vector
 sqNorm :: forall a. (Ring a) => Point' a -> a
 sqNorm p = dotProd p p
-
+-}
 -- | Rotate a vector 90 degres in the trigonometric direction.
 rotate90 :: forall a. Group a => Point' a -> Point' a
 rotate90 (Point x y) = Point (negate y) x
 
 -- | Rotate a vector 180 degres
 rotate180 :: forall a. Group a => Point' a -> Point' a
-rotate180 x = rotate90 . rotate90 $ x
+rotate180 = rotate90 . rotate90
 
 xdiff,ydiff :: Point -> Point -> Expr
 xdiff p q = xpart (q - p)

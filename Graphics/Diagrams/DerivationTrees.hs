@@ -171,7 +171,7 @@ toDiagram layerHeight (Node Rule{..} premises) = do
   xd   === xdiff (psGrp # E) (separ # E)
   relax 2 $ (2 *- xd) =~= premisesDist
   -- centering of conclusion
-  relax 3 $ minimize $ sqNorm $ (separ # Center) - (concl # Center)
+  relax 3 $ minimize $ orthonorm $ (separ # Center) - (concl # Center)
 
   -- draw the rule.
   using ruleStyle $ path $ polyline [separ # W,separ # E]

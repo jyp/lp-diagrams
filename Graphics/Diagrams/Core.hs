@@ -128,34 +128,6 @@ freeze x f = tell [Freeze (\y -> (f y)) x]
 -- Diagrams
 
 
--- | Relax the optimisation functions by the given factor
-relax :: Monad m => Rational -> Diagram lab m a -> Diagram lab m a
-relax factor = tighten (recip factor)
-
--- | Tighten the optimisation functions by the given factor
-tighten :: Monad m => Rational -> Diagram lab m a -> Diagram lab m a
-tighten factor = local (over diaTightness (* factor))
-
---------------
--- Variables
-
-newVars :: Monad m => [String] -> Diagram lab m [Expr]
-newVars kinds = forM kinds $ \name -> do
-  v <- rawNewVar name
-  return $ variable v
- where rawNewVar :: Monad m => String -> Diagram lab m Var
-       rawNewVar name = Dia $ do
-         Var x <- use diaNextVar
-         diaNextVar .= Var (x+1)
-         diaVarNames %= M.insert (Var x) name
-         return $ Var x
-
-
-infix 4 <==,===,>==
-
-----------------
--- Expressions
-
 runDiagram :: Monad m => Backend lab m -> Diagram lab m a -> m a
 runDiagram backend diag = do
   let env = Env one defaultPathOptions backend
@@ -184,6 +156,34 @@ runDiagram backend diag = do
   forM_ ds (\(Freeze f x) -> f (fmap (\(E (R g)) -> g (lkMod solution)) x))
   return a
 
+-- | Relax the optimisation functions by the given factor
+relax :: Monad m => Rational -> Diagram lab m a -> Diagram lab m a
+relax factor = tighten (recip factor)
+
+-- | Tighten the optimisation functions by the given factor
+tighten :: Monad m => Rational -> Diagram lab m a -> Diagram lab m a
+tighten factor = local (over diaTightness (* factor))
+
+--------------
+-- Variables
+
+newVars :: Monad m => [String] -> Diagram lab m [Expr]
+newVars kinds = forM kinds $ \name -> do
+  v <- rawNewVar name
+  return $ variable v
+ where rawNewVar :: Monad m => String -> Diagram lab m Var
+       rawNewVar name = Dia $ do
+         Var x <- use diaNextVar
+         diaNextVar .= Var (x+1)
+         diaVarNames %= M.insert (Var x) name
+         return $ Var x
+
+
+infix 4 <==,===,>==
+
+----------------
+-- Expressions
+
 
 -- | Embed a variable in an expression
 variable :: Var -> Expr
@@ -195,7 +195,7 @@ constant c = E (R $ \_ -> fromDouble c)
 
 satAll :: Monad m => String -> (Expr -> a -> Diagram lab m b) -> [a] -> Diagram lab m Expr
 satAll name p xs = do
-  [m] <- newVars [(name)]
+  [m] <- newVars [name]
   mapM_ (p m) xs
   return m
 
@@ -245,10 +245,6 @@ allPairs :: forall a. [a] -> [Pair a]
 allPairs [] = []
 allPairs (x:xs) = [Pair x y | y <- xs] ++ allPairs xs
 
-
-assert :: Monad m => SExpr -> Diagram lab m ()
-assert x = diaLinConstraints %= (x:)
-
 resolveNonOverlaps :: Monad m => Diagram lab m ()
 resolveNonOverlaps = do
   noOvl <- Dia $ use diaNoOverlaps
@@ -260,6 +256,9 @@ resolveNonOverlaps = do
 
 ---------------------------------
 -- Constraint & SExpr utils
+
+assert :: Monad m => SExpr -> Diagram lab m ()
+assert x = diaLinConstraints %= (x:)
 
 (.<=),(.==) :: Expr -> Expr -> Constraint
 x .<= y = binop "<=" (renderExpr x) (renderExpr y)
