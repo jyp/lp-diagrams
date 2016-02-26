@@ -71,7 +71,7 @@ delayD (Node r ps0) = Node r (map delayP ps)
 
 derivationTreeDiag :: Monad m => Derivation lab -> Diagram lab m ()
 derivationTreeDiag d = do
-  [h] <- newVars [("height",ContVar)] -- the height of a layer in the tree.
+  [h] <- newVars ["height"] -- the height of a layer in the tree.
   minimize h
   h >== constant 1
   tree@(T.Node (_,n,_) _) <- toDiagram h d
@@ -83,7 +83,7 @@ derivationTreeDiag d = do
   let leftFringe = map head nonNilLevs
       rightFringe = map last nonNilLevs
       nonNilLevs = filter (not . null) $ T.levels tree
-  [leftMost,rightMost] <- newVars [("leftMost",ContVar),("rightMost",ContVar)]
+  [leftMost,rightMost] <- newVars ["leftMost","rightMost"]
   forM_ leftFringe $ \(p,_,_) ->
     leftMost <== xpart p
   forM_ rightFringe $ \(_,_,p) ->
@@ -100,7 +100,7 @@ toDiagPart layerHeight (Link{..} ::> rul)
     let pt = ptObj # S
     pt `eastOf` (concl # W)
     pt `westOf` (concl # E)
-    xpart pt =~= xpart (concl # Center)
+    (xpart pt) =~= (xpart (concl # Center))
     let top = ypart (concl # S)
     ypart pt + (fromIntegral steps *- layerHeight) === top
     using linkStyle $ path $ polyline [ptObj # Base,Point (xpart pt) top]
@@ -171,8 +171,7 @@ toDiagram layerHeight (Node Rule{..} premises) = do
   xd   === xdiff (psGrp # E) (separ # E)
   relax 2 $ (2 *- xd) =~= premisesDist
   -- centering of conclusion
-  xd' <- absoluteValue $ xdiff (separ # Center) (concl # Center)
-  relax 3 $ minimize xd'
+  relax 3 $ minimize $ orthonorm $ (separ # Center) - (concl # Center)
 
   -- draw the rule.
   using ruleStyle $ path $ polyline [separ # W,separ # E]

@@ -25,17 +25,25 @@ library
                        Graphics.Diagrams.Plot,
                        Graphics.Diagrams.Point,
                        Graphics.Diagrams.Core,
+                       Graphics.Diagrams.Types,
                        Graphics.Diagrams.DerivationTrees,
                        Graphics.Diagrams
+  other-modules:       SMT.Model
+
+                       Algebra.Linear
   build-depends:       base >=4.8 && < 666,
+                       sbv,
                        lens >=4.12,
                        text >=1.2 ,
                        typography-geometry >=1.0 ,
                        gasp,
-                       glpk-hs >=0.3 ,
+                       nonlinear-optimization,
+                       reflection,
                        vector,
                        polynomials-bernstein,
                        mtl >=2.2 ,
                        containers >=0.5,
-                       labeled-tree
+                       labeled-tree,
+                       parsek,
+                       process
   default-language:    Haskell2010

@@ -7,8 +7,8 @@ import Graphics.Diagrams.Point
 import Graphics.Diagrams.Core
 import Control.Monad
 import Control.Lens (set,view)
-import Algebra.Classes
-import Prelude hiding (Num(..))
+import Algebra.Classes hiding (normalize)
+import Prelude hiding (Num(..),(/))
 
 data Anchor = Center | N | NW | W | SW | S | SE | E | NE | BaseW | Base | BaseE
   deriving Show
@@ -79,7 +79,7 @@ labelAt name labell anchor labeled  = do
 -- | A free point
 point :: Monad m => String -> Diagram lab m Object
 point name = do
-  [x,y] <- newVars [(name++".x",ContVar),(name++".y",ContVar)]
+  [x,y] <- newVars [(name++".x"),(name++".y")]
   return $ Object name EmptyPath (\_ -> Point x y)
 
 -- -- | A free point
@@ -90,7 +90,7 @@ point name = do
 box :: Monad m => String -> Diagram lab m Object
 box objectName = do
   [n,s,e,w,base,midx,midy] <- newVars $
-     zip (map (\suff -> objectName++"."++suff) ["north","south","east","west","base","midx","midy"]) (repeat ContVar)
+     (map (\suff -> objectName++"."++suff) ["north","south","east","west","base","midx","midy"])
   n >== base
   base >== s
   w <== e
@@ -231,9 +231,17 @@ insideBox p o = do
 -- | @autoLabel o i@ Layouts the label object @o@ at the given incidence
 -- vector.
 autoLabelObj :: Monad m => Box -> OVector -> Diagram lab m ()
-autoLabelObj lab (OVector pt norm) = do
-  pt `insideBox` lab
-  minimize =<< orthoDist (lab#Center) (pt + norm)
+autoLabelObj lab (OVector pt v) = do
+  let normalVector :: Point' Expr
+      normalVector = v
+  -- label must touch the point
+  tighten 10 $ pt `insideBox` lab
+  minimize (orthonorm (pt+v- lab#Center))
+  -- go as far as possible in the normal direction
+  -- maximize $ dotProd (((lab#Center) - pt)) normalVector
+  -- don't stray away from the normal line
+  -- minimize $ absE $ dotProd (((lab#Center) - pt)) (rotate90 normalVector)
+  --
 
 -- | @autoLabel o i@ Layouts the label object @o@ at the given incidence
 -- vector.

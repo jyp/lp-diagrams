@@ -1,12 +1,11 @@
-{-# LANGUAGE TypeSynonymInstances, FlexibleContexts, FlexibleInstances, GeneralizedNewtypeDeriving, MultiParamTypeClasses, RecursiveDo, TypeFamilies, OverloadedStrings, RecordWildCards,UndecidableInstances, PackageImports, TemplateHaskell #-}
+{-# LANGUAGE TypeSynonymInstances, FlexibleContexts, FlexibleInstances, GeneralizedNewtypeDeriving, MultiParamTypeClasses, RecursiveDo, TypeFamilies, OverloadedStrings, RecordWildCards,UndecidableInstances, PackageImports, TemplateHaskell, RankNTypes #-}
 
 module Graphics.Diagrams.Point where
 
 import Graphics.Diagrams.Core
 import Data.Foldable
-import Control.Applicative
 import Data.List (transpose)
-import Prelude hiding (sum,mapM_,mapM,concatMap,maximum,minimum,Num(..))
+import Prelude hiding (sum,mapM_,mapM,concatMap,maximum,minimum,Num(..),(/))
 import Algebra.Classes
 
 infix 4 .=.
@@ -17,19 +16,34 @@ infix 4 .=.
 
 type Point = Point' Expr
 
--- | Orthogonal norm of a vector
-orthonorm :: Monad m => Point -> Diagram lab m Expr
-orthonorm (Point x y) =
-  (+) <$> absoluteValue x <*> absoluteValue y
+orthonorm :: Point -> Expr
+orthonorm (Point x y) = absE x + absE y
 
--- | Orthogonal distance between points.
-orthoDist :: Monad m => Point -> Point -> Diagram lab m Expr
-orthoDist p q = orthonorm (q-p)
+{-
 
+
+-- | Norm of a vector. Don't minimize this: the solver does not like functions
+-- with non-continuous derivatives (at zero in this case).
+norm :: Point' Expr -> Expr
+norm p = sqrtE (sqNorm p)
+
+normalize :: Point' Expr -> Point' Expr
+normalize x = (one/norm x) *^ x
+
+-- | Dot product
+dotProd :: forall a. (Ring a) => Point' a -> Point' a -> a
+dotProd (Point x y) (Point x' y') = x*x' + y*y'
+
+-- | Squared norm of a vector
+sqNorm :: forall a. (Ring a) => Point' a -> a
+sqNorm p = dotProd p p
+-}
 -- | Rotate a vector 90 degres in the trigonometric direction.
-rotate90, rotate180 :: Point -> Point
+rotate90 :: forall a. Group a => Point' a -> Point' a
 rotate90 (Point x y) = Point (negate y) x
 
+-- | Rotate a vector 180 degres
+rotate180 :: forall a. Group a => Point' a -> Point' a
 rotate180 = rotate90 . rotate90
 
 xdiff,ydiff :: Point -> Point -> Expr
@@ -61,12 +75,3 @@ alignMatrix :: Monad m => [[Point]] -> Diagram lab m ()
 alignMatrix ls = do
   forM_ ls alignHoriz
   forM_ (transpose ls) alignVert
-
----------------------
--- Point objectives
-
-southwards, northwards, westwards, eastwards :: Monad m => Point -> Diagram lab m ()
-southwards (Point _ y) = minimize y
-westwards (Point x _) = minimize x
-northwards = southwards . negate
-eastwards = westwards . negate
