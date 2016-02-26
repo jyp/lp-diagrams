@@ -108,7 +108,7 @@ type Constraint = SExpr
 
 data DiagramState = DiagramState
   {_diaNextVar :: Var  -- ^ next var to allocate
-  ,_diaLinConstraints :: [Constraint]
+  ,_diaConstraints :: [Constraint]
   ,_diaObjective :: Expr -- ^ objective function
   ,_diaVarNames :: Map Var String
   ,_diaNoOverlaps :: [Pair (Point' Expr)]
@@ -137,7 +137,7 @@ runDiagram backend diag = do
       decls = [sexp ["declare-const", smtVar x, "Real"] | x <- [Var 0 .. maxVar]]
       constrs = intercalate "\n" $ map fromS $
         decls ++
-        (unop "assert" <$> (finalState ^. diaLinConstraints)) ++
+        (unop "assert" <$> (finalState ^. diaConstraints)) ++
         [ unop "minimize" (renderExpr (finalState ^. diaObjective)),
           sexp ["check-sat"],
           sexp ["get-model"]
@@ -258,7 +258,7 @@ resolveNonOverlaps = do
 -- Constraint & SExpr utils
 
 assert :: Monad m => SExpr -> Diagram lab m ()
-assert x = diaLinConstraints %= (x:)
+assert x = diaConstraints %= (x:)
 
 (.<=),(.==) :: Expr -> Expr -> Constraint
 x .<= y = binop "<=" (renderExpr x) (renderExpr y)
