@@ -37,7 +37,6 @@ library
                        text >=1.2 ,
                        typography-geometry >=1.0 ,
                        gasp,
-                       nonlinear-optimization,
                        reflection,
                        vector,
                        polynomials-bernstein,
