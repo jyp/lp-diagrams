@@ -32,7 +32,6 @@ library
 
                        Algebra.Linear
   build-depends:       base >=4.8 && < 666,
-                       sbv,
                        lens >=4.12,
                        text >=1.2 ,
                        typography-geometry >=1.0 ,
