@@ -1,5 +1,5 @@
 name:                lp-diagrams
-version:             2.0
+version:             2.0.0
 synopsis:            An EDSL for diagrams based based on linear constraints
 license:             AGPL-3
 license-file:        LICENSE
@@ -10,10 +10,19 @@ category:            Graphics
 build-type:          Simple
 -- extra-source-files:  
 cabal-version:       >=1.18
+description:
+  A library to describe diagrams. The defining
+  feature of the package is the ability to use linear constraints to
+  specify layout, which are resolved using z3 (latest z3 must be installed).
+  Backends are provided either of the following packages lp-diagrams-svg (svg) or marxup (tikz).
 
 Flag graphviz
   Description: Enable graphviz support
   Default:     True
+
+source-repository head
+  type: git
+  location: https://github.com/jyp/lp-diagrams
 
 library
   if flag(graphviz)
