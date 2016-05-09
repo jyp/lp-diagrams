@@ -26,6 +26,7 @@ import Data.List (isPrefixOf,intercalate)
 import Data.String
 import System.Process
 import SMT.Model
+import Numeric (showFFloat)
 
 -- | Expressions are linear functions of the variables
 
@@ -151,7 +152,9 @@ runDiagram backend diag = do
           Right model -> return $ M.fromList model
           Left err -> do print err
                          error "die."
-      lkMod m (Var v) = M.findWithDefault (error "variable not in model") ("x"++show v) m
+      lkMod m (Var v) = M.findWithDefault
+        (error ("variable not in model x" ++ show v))
+        ("x"++show v) m
 
   forM_ ds (\(Freeze f x) -> f (fmap (\(E (R g)) -> g (lkMod solution)) x))
   return a
@@ -305,6 +308,9 @@ instance IsDouble Expr where
   absE (E x) = E (absE x)
 
 instance IsDouble SExpr where
-  fromDouble x = S $ show x
+  fromDouble x = S $ showFFloat Nothing x ""
+  -- can't use 'show': z3 solver 4.4.1 does not understand scientific notation
+  -- (eg. 4e-2)
+
   -- sqrtE x = binop "^" x "0.5"
   absE = unop "abs"
