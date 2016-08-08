@@ -1,4 +1,4 @@
-{-# LANGUAGE TypeSynonymInstances, FlexibleContexts, FlexibleInstances, GeneralizedNewtypeDeriving, MultiParamTypeClasses, RecursiveDo, TypeFamilies, OverloadedStrings, RecordWildCards,UndecidableInstances, PackageImports, TemplateHaskell, RankNTypes, GADTs, ImpredicativeTypes, DeriveFunctor, ScopedTypeVariables, ConstraintKinds, OverloadedStrings #-}
+{-# LANGUAGE TypeSynonymInstances, FlexibleContexts, FlexibleInstances, GeneralizedNewtypeDeriving, MultiParamTypeClasses, RecursiveDo, TypeFamilies, OverloadedStrings, RecordWildCards,UndecidableInstances, PackageImports, TemplateHaskell, RankNTypes, GADTs, DeriveFunctor, ScopedTypeVariables, ConstraintKinds, OverloadedStrings #-}
 
 module Graphics.Diagrams.Core (
   module Graphics.Diagrams.Types,
@@ -232,8 +232,8 @@ minimize f = do
 
 drawText :: Monad m => Point' Expr -> lab -> Diagram lab m BoxSpec
 drawText point lab = do
-  tl <- view (diaBackend . traceLabel)
-  tl freeze diaRaw point lab
+  be <- view diaBackend
+  case be of Backend _ tl -> tl freeze diaRaw point lab
 
 diaRaw :: Monad m => m a -> Diagram lab m a
 diaRaw = Dia . lift

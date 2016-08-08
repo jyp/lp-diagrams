@@ -1,4 +1,4 @@
-{-# LANGUAGE TypeSynonymInstances, FlexibleContexts, FlexibleInstances, GeneralizedNewtypeDeriving, MultiParamTypeClasses, RecursiveDo, TypeFamilies, OverloadedStrings, RecordWildCards,UndecidableInstances, PackageImports, TemplateHaskell, RankNTypes, GADTs, ImpredicativeTypes, DeriveFunctor, ScopedTypeVariables, ConstraintKinds #-}
+{-# LANGUAGE TypeSynonymInstances, FlexibleContexts, FlexibleInstances, GeneralizedNewtypeDeriving, MultiParamTypeClasses, RecursiveDo, TypeFamilies, OverloadedStrings, RecordWildCards,UndecidableInstances, PackageImports, TemplateHaskell, RankNTypes, GADTs, DeriveFunctor, ScopedTypeVariables, ConstraintKinds, InstanceSigs #-}
 
 module Graphics.Diagrams.Types where
 import Algebra.Classes as AC
@@ -149,7 +149,8 @@ data Backend lab m =
                                                  x BoxSpec
                          }
 
-$(makeLenses ''Backend)
+tracePath :: Lens' (Backend lab m) (PathOptions -> FrozenPath -> m ())
+tracePath f (Backend tp tl) = fmap (\x -> Backend x tl) (f tp)
 
 data Env lab m = Env {_diaTightness :: Rational -- ^ Multiplicator to minimize constraints
                      ,_diaPathOptions :: PathOptions
