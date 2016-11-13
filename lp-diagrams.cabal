@@ -1,5 +1,5 @@
 name:                lp-diagrams
-version:             2.0.0
+version:             2.1.0
 synopsis:            An EDSL for diagrams based based on linear constraints
 license:             AGPL-3
 license-file:        LICENSE
