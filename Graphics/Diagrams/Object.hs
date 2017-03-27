@@ -134,6 +134,13 @@ width o = xpart (o # E - o # W)
 ascent o = ypart (o # N - o # Base)
 descent o = ypart (o # Base - o # S)
 
+
+o `sloppyFitsHorizontallyIn` o' = do
+  let dyW = xpart $ o # W - o' # W
+      dyE = xpart $ o' # E - o # E
+  dyW >== zero
+  dyE >== zero
+
 -- | Make one object fit (snugly) in the other.
 fitsIn, fitsHorizontallyIn, fitsVerticallyIn
   :: (Monad m) => Object -> Object -> Diagram lab m ()

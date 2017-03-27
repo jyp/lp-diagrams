@@ -88,7 +88,7 @@ derivationTreeDiag d = do
     leftMost <== xpart p
   forM_ rightFringe $ \(_,_,p) ->
     xpart p <== rightMost
-  minimize $ 10 *- (rightMost - leftMost)
+  tighten 10 $ minimize $ (rightMost - leftMost)
   n # Center .=. zero
 
 toDiagPart :: Monad m => Expr -> Premise lab -> Diagram lab m (T.Tree (Point,Object,Point))
@@ -166,7 +166,7 @@ toDiagram layerHeight (Node Rule{..} premises) = do
   align ypart [concl # N,separ # S]
   minimize $ width separ
   psGrp `fitsHorizontallyIn` separ
-  concl `fitsHorizontallyIn` separ
+  concl `sloppyFitsHorizontallyIn` separ
 
   -- rule label
   lab # BaseW .=. separ # E + Point (constant 3) (constant (negate 1))
@@ -177,7 +177,8 @@ toDiagram layerHeight (Node Rule{..} premises) = do
   xd   === xdiff (psGrp # E) (separ # E)
   relax 2 $ (2 *- xd) =~= premisesDist
   -- centering of conclusion
-  relax 3 $ minimize $ orthonorm $ (separ # Center) - (concl # Center)
+  (xpart (separ # Center) - xpart (concl # Center)) === zero
+  -- minimize (xpart (separ # Center) - xpart (concl # Center)) -- does not produce the expected results with current z3 version
 
   -- draw the rule.
   using ruleStyle $ path $ polyline [separ # W,separ # E]

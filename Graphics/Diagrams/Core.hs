@@ -227,7 +227,7 @@ minimize,maximize :: Monad m => Expr -> Diagram lab m ()
 maximize = minimize . negate
 minimize f = do
   tightness <- view diaTightness
-  diaObjective %= \o -> tightness *^ f + o
+  diaObjective %= \o -> (tightness *^ f) + o
 
 
 drawText :: Monad m => Point' Expr -> lab -> Diagram lab m BoxSpec
