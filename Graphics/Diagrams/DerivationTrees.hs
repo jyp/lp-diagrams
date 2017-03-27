@@ -130,12 +130,16 @@ chainBases spacing ls = do
   D.align xpart [grp # E,last ls # E]
   return (grp,avg dxs)
 
+debug :: Monad m => m a -> m ()
+debug x = return () 
+-- debug x = x >> return ()
+
 -- | Put object in a box of the same vertical extent, and baseline,
 -- but whose height can be bigger.
 relaxHeight :: (Monad m) => Object -> Diagram lab m Object
 relaxHeight o = do
   b <- box "relaxed"
-  -- using (outline "green")$ traceBounds o
+  debug $ traceBox "green" o
   D.align xpart [b#W,o#W]
   D.align xpart [b#E,o#E]
   D.align ypart [b#Base,o#Base]
@@ -146,13 +150,15 @@ toDiagram :: Monad m => Expr -> Derivation lab -> Diagram lab m (T.Tree (Point,O
 toDiagram layerHeight (Node Rule{..} premises) = do
   ps <- mapM (toDiagPart layerHeight) premises
   concl <- relaxHeight =<< extend (constant 1.5) <$> rawLabel "concl" conclusion
-  -- using (outline "red")$ traceBounds concl
+  debug $ traceBox "red" concl
   lab <- rawLabel "rulename" ruleLabel
 
   -- Grouping
   (psGrp,premisesDist) <- chainBases (constant 10) [p | T.Node (_,p,_) _ <- ps]
-  -- using (outline "blue" . denselyDotted) $ traceBounds psGrp
-  height psGrp === layerHeight
+  debug $ using denselyDotted $ traceBox "blue" psGrp
+  height psGrp === case ps of
+                     [] -> zero
+                     _ -> layerHeight
 
   -- Separation rule
   separ <- hrule "separation"
