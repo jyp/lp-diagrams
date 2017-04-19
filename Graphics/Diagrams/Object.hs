@@ -268,11 +268,11 @@ labeledEdge source target lab = autoLabelObj lab =<< edge source target
 nodeDistance :: Expr
 nodeDistance = constant 5
 
-leftOf :: Monad m => Object -> Object -> Diagram lab m ()
-a `leftOf` b = spread hdist nodeDistance [a,b]
+leftOf, topOf, rightOf :: Monad m => Object -> Object -> Diagram lab m ()
 
-topOf :: Monad m => Object -> Object -> Diagram lab m ()
+a `leftOf` b = spread hdist nodeDistance [a,b]
 a `topOf` b =  spread vdist nodeDistance [b,a]
+rightOf = flip leftOf
 
 -- | Spread a number of objects by *minimum* a given distance. example: @spread
 -- hdist 30 ps@
