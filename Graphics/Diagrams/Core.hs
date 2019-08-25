@@ -2,7 +2,7 @@
 
 module Graphics.Diagrams.Core (
   module Graphics.Diagrams.Types,
-  Expr, constant, absE, newVars,
+  Expr, constant, absE, newVar,
   minimize, maximize,
   (===), (>==), (<==), (=~=),
   Diagram(..), runDiagram,
@@ -11,14 +11,14 @@ module Graphics.Diagrams.Core (
   registerNonOverlap
   ) where
 
-import Prelude hiding (sum,mapM_,mapM,concatMap,Num(..),(/),fromRational,recip,(/))
+import Prelude hiding (sum,mapM_,mapM,concatMap,Num(..),(/),fromRational,recip,(/),fail)
 import qualified Prelude
-import Control.Monad.RWS hiding (forM,forM_,mapM_,mapM)
+import Control.Monad.RWS hiding (forM,forM_,mapM_,mapM,fail)
+import Control.Monad.Fail
 import Algebra.Classes as AC
 import Data.Map (Map)
 import qualified Data.Map.Strict as M
 import Control.Lens hiding (element)
-import Data.Traversable
 import Data.Foldable
 import System.IO.Unsafe
 import Graphics.Diagrams.Types
@@ -120,6 +120,9 @@ $(makeLenses ''DiagramState)
 newtype Diagram lab m a = Dia {fromDia :: (RWST (Env lab m) [Freeze m] DiagramState m a)}
   deriving (Monad, Applicative, Functor, MonadReader (Env lab m), MonadWriter [Freeze m], MonadState DiagramState)
 
+instance MonadFail m => MonadFail (Diagram lab m) where
+  fail msg = Dia (fail msg)
+
 -- | @freeze x f@ performs @f@ on the frozen value of @x@.
 freeze :: (Functor t, Monad m) => t Expr -> (t Constant -> m ()) -> Diagram lab m ()
 freeze x f = tell [Freeze (\y -> (f y)) x]
@@ -170,9 +173,9 @@ tighten factor = local (over diaTightness (* factor))
 --------------
 -- Variables
 
-newVars :: Monad m => [String] -> Diagram lab m [Expr]
-newVars kinds = forM kinds $ \name -> do
-  v <- rawNewVar name
+newVar :: Monad m => String -> Diagram lab m Expr
+newVar nm = do
+  v <- rawNewVar nm
   return $ variable v
  where rawNewVar :: Monad m => String -> Diagram lab m Var
        rawNewVar name = Dia $ do
@@ -198,7 +201,7 @@ constant c = E (R $ \_ -> fromDouble c)
 
 satAll :: Monad m => String -> (Expr -> a -> Diagram lab m b) -> [a] -> Diagram lab m Expr
 satAll name p xs = do
-  [m] <- newVars [name]
+  m <- newVar name
   mapM_ (p m) xs
   return m
 

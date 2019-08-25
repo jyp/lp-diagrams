@@ -79,7 +79,7 @@ labelAt name labell anchor labeled  = do
 -- | A free point
 point :: Monad m => String -> Diagram lab m Object
 point name = do
-  [x,y] <- newVars [(name++".x"),(name++".y")]
+  x <- newVar (name++".x"); y <- newVar (name++".y")
   return $ Object name EmptyPath (\_ -> Point x y)
 
 -- -- | A free point
@@ -89,8 +89,8 @@ point name = do
 -- | A box. Anchors are aligned along a grid.
 box :: Monad m => String -> Diagram lab m Object
 box objectName = do
-  [n,s,e,w,base,midx,midy] <- newVars $
-     (map (\suff -> objectName++"."++suff) ["north","south","east","west","base","midx","midy"])
+  let nv suff = newVar (objectName++"."++suff)
+  n <- nv "north" ; s <- nv "south"; e <- nv "east"; w <- nv "west"; base <- nv "base"; midx <- nv "midx"; midy <- nv "midy"
   n >== base
   base >== s
   w <== e
@@ -135,6 +135,7 @@ ascent o = ypart (o # N - o # Base)
 descent o = ypart (o # Base - o # S)
 
 
+sloppyFitsHorizontallyIn :: Monad m => Object -> Object -> Diagram lab m ()
 o `sloppyFitsHorizontallyIn` o' = do
   let dyW = xpart $ o # W - o' # W
       dyE = xpart $ o' # E - o # E
@@ -239,8 +240,8 @@ insideBox p o = do
 -- vector.
 autoLabelObj :: Monad m => Box -> OVector -> Diagram lab m ()
 autoLabelObj lab (OVector pt v) = do
-  let normalVector :: Point' Expr
-      normalVector = v
+  -- let normalVector :: Point' Expr
+  --     normalVector = v
   -- label must touch the point
   tighten 10 $ pt `insideBox` lab
   minimize (orthonorm (pt+v- lab#Center))

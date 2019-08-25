@@ -71,7 +71,7 @@ delayD (Node r ps0) = Node r (map delayP ps)
 
 derivationTreeDiag :: Monad m => Derivation lab -> Diagram lab m ()
 derivationTreeDiag d = do
-  [h] <- newVars ["height"] -- the height of a layer in the tree.
+  h <- newVar "height" -- the height of a layer in the tree.
   minimize h
   h >== constant 1
   tree@(T.Node (_,n,_) _) <- toDiagram h d
@@ -83,7 +83,7 @@ derivationTreeDiag d = do
   let leftFringe = map head nonNilLevs
       rightFringe = map last nonNilLevs
       nonNilLevs = filter (not . null) $ T.levels tree
-  [leftMost,rightMost] <- newVars ["leftMost","rightMost"]
+  leftMost <- newVar "leftMost"; rightMost <- newVar "rightMost" 
   forM_ leftFringe $ \(p,_,_) ->
     leftMost <== xpart p
   forM_ rightFringe $ \(_,_,p) ->
