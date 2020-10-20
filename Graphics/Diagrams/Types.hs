@@ -145,8 +145,8 @@ data Backend lab m =
                                                  (location -> (FrozenPoint -> m ()) -> x ()) -> -- freezer
                                                  (forall a. m a -> x a) -> -- embedder
                                                  location ->
-                                                 lab -> -- label specification
-                                                 x BoxSpec
+                                                 lab -> -- label specification (eg. the text; backend-dependent)
+                                                 x BoxSpec -- the backend returns the size of the label
                          }
 
 tracePath :: Lens' (Backend lab m) (PathOptions -> FrozenPath -> m ())
