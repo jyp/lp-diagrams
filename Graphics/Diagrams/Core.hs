@@ -70,6 +70,8 @@ instance Division x => Division (R env x) where
   recip = fmap recip
   (/) = liftA2 (/)
 instance AbelianAdditive x => AbelianAdditive (R env x)
+instance Ring x => Module (R env x) (R env x) where
+  (*^) = (*)
 instance Ring x => Ring (R env x) where
   fromInteger x = pure (fromInteger x)
 instance Field x => Field (R env x) where
@@ -298,6 +300,8 @@ instance Additive (SExpr) where
   zero = S "0"
 instance AbelianAdditive (SExpr)
 instance Field (SExpr)
+instance Module SExpr SExpr where
+  (*^) = (*)
 instance Ring (SExpr)
 instance Group (SExpr) where
   negate = unop "-"
