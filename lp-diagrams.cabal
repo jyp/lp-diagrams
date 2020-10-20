@@ -1,6 +1,6 @@
 cabal-version:       1.18
 name:                lp-diagrams
-version:             2.1.3
+version:             2.1.4
 synopsis:            An EDSL for diagrams based based on linear constraints
 license:             AGPL-3
 license-file:        LICENSE
