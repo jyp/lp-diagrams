@@ -38,6 +38,11 @@ dotProd (Point x y) (Point x' y') = x*x' + y*y'
 sqNorm :: forall a. (Ring a) => Point' a -> a
 sqNorm p = dotProd p p
 -}
+
+-- | Rotate a vector in the trigonometric direction.
+rotate :: (Module scalar a, Floating scalar, Group a) => scalar -> Point' a -> Point' a
+rotate a (Point x y) = Point (cos a *^ x - sin a *^ y) (sin a *^ x + cos a *^ y)
+
 -- | Rotate a vector 90 degres in the trigonometric direction.
 rotate90 :: forall a. Group a => Point' a -> Point' a
 rotate90 (Point x y) = Point (negate y) x
