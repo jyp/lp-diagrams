@@ -5,7 +5,8 @@ import Graphics.Diagrams.Core
 import Graphics.Diagrams.Path
 import Graphics.Diagrams.Object
 import Graphics.Diagrams.Point
-import Control.Monad (forM_,forM,when)
+import Graphics.Diagrams.Shape
+import Control.Monad (forM_,forM)
 import Algebra.Classes
 import Prelude hiding (Num(..),(/))
 
@@ -58,7 +59,7 @@ lint p origin target = (p*-(target-origin)) + origin
 -- Input data in the [0,1] interval fits the box.
 scatterPlot :: Monad m => PlotCanvas a -> [Vec2 a] -> Diagram lab m ()
 scatterPlot (bx,_outerBox,xform) input = forM_ (map (forward <$> xform <*>) input) $ \z -> do
-  pt <- using (fill "black") $ circle "plotMark"
+  pt <- using (fill "black") $ obj circle "plotMark"
   width pt === constant 3
   pt # Center .=. interpBox bx z
 
@@ -116,7 +117,7 @@ type PlotCanvas a = (Box, Box, Vec2 (Transform a))
 
 preparePlot :: Monad m => Vec2 (ShowFct lab a) -> Vec2 (Transform a) -> Vec2 a -> Vec2 a -> Diagram lab m (PlotCanvas a)
 preparePlot showFct axesXform lo hi = do
-  bx <- box "plotFrame"
+  bx <- obj box "plotFrame"
   labelBoxes <- axes bx marks
   outerbox <- boundingBox (bx:labelBoxes)
   return (bx,outerbox,xform)

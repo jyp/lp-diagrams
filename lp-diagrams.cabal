@@ -30,6 +30,7 @@ library
     exposed-modules: Graphics.Diagrams.Graphviz
 
   exposed-modules:     Graphics.Diagrams.Object,
+                       Graphics.Diagrams.Shape,
                        Graphics.Diagrams.Path,
                        Graphics.Diagrams.Plot,
                        Graphics.Diagrams.Point,

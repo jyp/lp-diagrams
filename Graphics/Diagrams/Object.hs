@@ -9,14 +9,12 @@ import Control.Monad
 import Control.Lens (set,view)
 import Algebra.Classes hiding (normalize)
 import Prelude hiding (Num(..),(/))
+import Graphics.Diagrams.Shape
 
-data Anchor = Center | N | NW | W | SW | S | SE | E | NE | BaseW | Base | BaseE
-  deriving Show
 
 -- | Box-shaped object. (a subtype)
 type Box = Object
 
-type Anchorage = Anchor -> Point
 data Object = Object { objectName :: !String
                      , objectOutline :: !Path
                      , anchors :: !Anchorage}
@@ -87,8 +85,8 @@ point name = do
 -- point' = point "point"
 
 -- | A box. Anchors are aligned along a grid.
-box :: Monad m => String -> Diagram lab m Object
-box objectName = do
+boxAnchors :: Monad m => String -> Diagram lab m Anchorage
+boxAnchors objectName = do
   let nv suff = newVar (objectName++"."++suff)
   n <- nv "north" ; s <- nv "south"; e <- nv "east"; w <- nv "west"; base <- nv "base"; midx <- nv "midx"; midy <- nv "midy"
   n >== base
@@ -98,7 +96,7 @@ box objectName = do
   midx === avg [w,e]
   midy === avg [n,s]
   let pt = flip Point
-      anchors anch = case anch of
+  return $ \case
         NW     -> pt n    w
         N      -> pt n    midx
         NE     -> pt n    e
@@ -111,20 +109,26 @@ box objectName = do
         Base   -> pt base midx
         BaseE  -> pt base e
         BaseW  -> pt base w
-      objectOutline = polygon (map anchors [NW,NE,SE,SW])
+
+
+obj :: Monad m => Shape -> String -> Diagram lab m Object
+obj shape objectName = do
+  anchors <- boxAnchors objectName
+  let objectOutline = shape anchors
   pathObject $ Object{..}
+
 
 -- | A box of zero width
 vrule :: Monad m => String -> Diagram lab m Object
 vrule name = do
-  o <- box name
+  o <- obj box name
   align xpart [o # W, o #Center, o#E]
   return o
 
 -- | A box of zero height
 hrule :: Monad m => String -> Diagram lab m Object
 hrule name = do
-  o <- box name
+  o <- obj box name
   height o === zero
   return o
 
@@ -165,14 +169,6 @@ a `fitsIn` b = do
   a `fitsHorizontallyIn` b
   a `fitsVerticallyIn` b
 
--- | A circle
-circle :: Monad m => String -> Diagram lab m Object
-circle name = do
-  bx <- noDraw (box name)
-  width bx === height bx
-  let radius = 0.5 *- width bx
-      p = circlePath (bx # Center) radius
-  pathObject $ Object name p (anchors bx)
 
 -- | Debug, by tracing the bounding box of the object in a certain color.
 traceBox :: (Monad m) => Color -> Object -> Diagram lab m ()
@@ -184,7 +180,7 @@ traceBox c l = do
 -- use 'label' instead.
 rawLabel :: Monad m => String -> lab -> Diagram lab m Object
 rawLabel name t = do
-  l <- noDraw (box name)
+  l <- noDraw (obj box name)
   -- traceAnchorage "red" l
   BoxSpec wid h desc <- drawText (l # NW) t
 
@@ -284,11 +280,10 @@ spread f d (x:y:xs) = do
   spread f d (y:xs)
 spread _ _ _ = return ()
 
--- | A node: a labeled circle
-node :: Monad m => String -> lab -> Diagram lab m Object
-node name lab = do
+-- | A node: a labeled object
+node shape name lab = do
   l <- noDraw $ label name lab
-  c <- circle name
+  c <- obj shape name
   l `fitsIn` c
   l # Center .=. c # Center
   return c
@@ -301,7 +296,7 @@ arrow src trg = using (outline "black" . set endTip LatexTip) $ do
 -- | Bounding box of a number of anchored values
 boundingBox :: (Monad m) => [Object] -> Diagram lab m Object
 boundingBox os = do
-  bx <- box $ "boundingBox" ++ (show $ map objectName os)
+  bx <- obj box $ "boundingBox" ++ (show $ map objectName os)
   mapM_ (`fitsIn` bx) os
   return bx
 
