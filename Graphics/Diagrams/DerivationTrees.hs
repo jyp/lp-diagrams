@@ -116,10 +116,10 @@ toDiagPart layerHeight (Link{..} ::> rul)
 
 chainBases :: Monad m => Expr -> [Object] -> Diagram lab m (Object,Expr)
 chainBases _ [] = do
-  o <- box "empty"
+  o <- obj box "empty"
   return (o,zero)
 chainBases spacing ls = do
-  grp <- box "grp"
+  grp <- obj box "grp"
   forM_ [Base,N,S] $ \ anch -> do
     D.align ypart $ map (# anch) (grp:ls)
   dxs <- forM (zip ls (tail ls)) $ \(x,y) -> do
@@ -138,7 +138,7 @@ debug x = return ()
 -- but whose height can be bigger.
 relaxHeight :: (Monad m) => Object -> Diagram lab m Object
 relaxHeight o = do
-  b <- box "relaxed"
+  b <- obj box "relaxed"
   debug $ traceBox "green" o
   D.align xpart [b#W,o#W]
   D.align xpart [b#E,o#E]
