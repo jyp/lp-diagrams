@@ -4,6 +4,7 @@ module Graphics.Diagrams.Graphviz (graph) where
 import Graphics.Diagrams.Point as D
 import Graphics.Diagrams.Object as D
 import Graphics.Diagrams.Core as D
+import Graphics.Diagrams.Shape as D
 import Graphics.Diagrams.Path
 import Data.GraphViz as G
 import Data.GraphViz.Attributes.Complete as G
@@ -22,21 +23,27 @@ graph labFct cmd gr = graphToDiagram labFct $ layout cmd gr
 layout :: (PrintDotRepr g n, ParseDot n, PrintDot n) => GraphvizCommand -> g n -> Gen.DotGraph n
 layout command input = parseIt' $ unsafePerformIO $ graphvizWithHandle command input DotOutput hGetStrict
 
+pos :: Attribute -> Maybe Pos
 pos (Pos p) = Just p
 pos _= Nothing
 
+lpos :: Attribute -> Maybe G.Point
 lpos (LPos p) = Just p
 lpos _= Nothing
 
+shapeA :: Attribute -> Maybe G.Shape
 shapeA (Shape s) = Just s
 shapeA _ = Nothing
 
+widthA :: Attribute -> Maybe Double
 widthA (Width s) = Just s
 widthA _ = Nothing
 
+labelA :: Attribute -> Maybe Label
 labelA (Label l) = Just l
 labelA _ = Nothing
 
+arrowHeadA :: Attribute -> Maybe ArrowType
 arrowHeadA (ArrowHead a) = Just a
 arrowHeadA _ = Nothing
 
@@ -61,10 +68,10 @@ diaSpline _ = []
 
 -- ToTip | CircleTip | NoTip | StealthTip | LatexTip | ReversedTip LineTip | BracketTip | ParensTip
 tipTop :: LineTip -> ArrowType -> LineTip
-tipTop def (AType [(_,NoArrow)]) = NoTip
-tipTop def (AType [(_,Normal)]) = LatexTip
-tipTop def (AType [(_,DotArrow)]) = CircleTip
-tipTop def (AType [(_,Vee)]) = StealthTip
+tipTop _def (AType [(_,NoArrow)]) = NoTip
+tipTop _def (AType [(_,Normal)]) = LatexTip
+tipTop _def (AType [(_,DotArrow)]) = CircleTip
+tipTop _def (AType [(_,Vee)]) = StealthTip
 tipTop def _ = def
 
 graphToDiagram :: forall l m n. Monad m => (String -> l) -> Gen.DotGraph n -> Diagram l m ()
@@ -108,4 +115,5 @@ graphToDiagram labFct (Gen.DotGraph _strict _directed _grIdent stmts) = do
     l' # D.Center .=. pt p
 
 
+inch :: Num a => a -> a
 inch x = 72 * x
