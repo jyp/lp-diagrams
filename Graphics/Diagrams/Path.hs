@@ -116,6 +116,24 @@ circlePath center r =
        k = k1 *^ r
        pt x y = center + (Point x y)
 
+roundedRectanglePath :: Expr -> Point -> Point -> Path
+roundedRectanglePath r (Point x1 y1) (Point x2 y2) =
+  Path (Point x1 (y1-r))
+  [
+    CurveTo (Point x1 (y1-k) ) (Point (x1+k) y1) (Point (x1+r) y1),
+    StraightTo (Point (x2-r) y1),
+    CurveTo (Point (x2-k) y1) (Point x2 (y1-k)) (Point (x2) (y1-r)),
+    StraightTo (Point (x2) (y2+r)),
+    CurveTo (Point x2 (y2+k)) (Point (x2-k) y2) (Point (x2-r) y2),
+    StraightTo (Point (x1+r) (y2)),
+    CurveTo (Point (x1+k) y2) (Point (x1) (y2+k)) (Point x1 (y2+r)),
+    Cycle
+  ]
+  where k1 :: Double
+        k1 = fromInteger 4 * (sqrt (fromInteger 2) - (fromInteger 1)) / fromInteger 3
+        k0 = k1 *^ r
+        k = r - k0
+
 
 path :: Monad m => Path -> Diagram lab m ()
 path p = do
