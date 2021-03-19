@@ -215,7 +215,7 @@ minimVar = satAll "minimum of" (<==)
 --------------
 -- Expression constraints
 
-(===), (>==), (<==) :: Expr -> Expr -> Monad m => Diagram lab m ()
+(===), (>==), (<==) :: Monad m => Expr -> Expr -> Diagram lab m ()
 e1 <== e2 = assert (e1 .<= e2)
 (>==) = flip (<==)
 e1 === e2 = assert (e1 .== e2)
