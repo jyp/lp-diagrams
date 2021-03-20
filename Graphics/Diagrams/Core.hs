@@ -152,11 +152,14 @@ runDiagram backend diag = do
         writeFile "problem.smt2" $ constrs
         _exitCode <- system "z3 -smt2 problem.smt2 > result.smt2"
         res <- readFile "result.smt2"
-        let modelText = unlines . dropWhile (not . ("(model" `isPrefixOf`)) . lines $ res
-        case readModel modelText of
-          Right model -> return $ M.fromList model
-          Left err -> do print err
-                         error "die."
+        let resLines = lines res
+        case resLines of
+          ("sat":ls) -> do
+            case readModel (unlines ls) of
+              Right model -> return $ M.fromList model
+              Left err -> do print err
+                             error "runDiagram: failed to parse output model"
+          _ -> error "runDiagram: z3 could not find a solution? check result.smt2"
       lkMod m (Var v) = M.findWithDefault
         (error ("variable not in model x" ++ show v))
         ("x"++show v) m

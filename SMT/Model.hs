@@ -40,9 +40,14 @@ parseAssoc = parens $ do
   x <- parseValue
   return (v,x)
 
+parens :: Parser a -> Parser a
 parens = between (tok "(") (tok")")
+
+parseModel :: Parser [(String, Double)]
 parseModel = parens $ do
-  tok "model"
+  _ <- optional (tok "model")
+    -- z3 <= 4.8.8   outputs the word "model"
+    -- z3 >= 4.8.10  does not
   many parseAssoc
 
 readModel :: String -> ParseResult SourcePos [(String, Double)]
