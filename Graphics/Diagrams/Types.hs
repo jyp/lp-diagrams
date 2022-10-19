@@ -38,7 +38,7 @@ instance Show a => Show (Pair a) where
 data Point' a = Point {xpart :: a, ypart :: a}
   deriving (Eq,Show,Functor)
 
-instance Module k a => Module k (Point' a) where
+instance Module k a => Scalable k (Point' a) where
   (*^) scalar = fmap (scalar *^)
 
 instance Traversable Point' where

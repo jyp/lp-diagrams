@@ -5,7 +5,7 @@ module Graphics.Diagrams.Point where
 import Graphics.Diagrams.Core
 import Data.Foldable
 import Data.List (transpose)
-import Prelude hiding (sum,mapM_,mapM,concatMap,maximum,minimum,Num(..),(/))
+import Prelude hiding (sum,mapM_,mapM,concatMap,maximum,minimum,Num(..),(/),Floating(..))
 import Algebra.Classes
 
 infix 4 .=.
@@ -40,7 +40,7 @@ sqNorm p = dotProd p p
 -}
 
 -- | Rotate a vector in the trigonometric direction.
-rotate :: (Module scalar a, Floating scalar, Group a) => scalar -> Point' a -> Point' a
+rotate :: (Module scalar a, Transcendental scalar, Group a) => scalar -> Point' a -> Point' a
 rotate a (Point x y) = Point (cos a *^ x - sin a *^ y) (sin a *^ x + cos a *^ y)
 
 -- | Rotate a vector 90 degres in the trigonometric direction.

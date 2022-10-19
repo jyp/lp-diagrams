@@ -70,7 +70,7 @@ instance Division x => Division (R env x) where
   recip = fmap recip
   (/) = liftA2 (/)
 instance AbelianAdditive x => AbelianAdditive (R env x)
-instance Ring x => Module (R env x) (R env x) where
+instance Ring x => Scalable (R env x) (R env x) where
   (*^) = (*)
 instance Ring x => Ring (R env x) where
   fromInteger x = pure (fromInteger x)
@@ -98,9 +98,9 @@ instance Group Expr where
 -- instance Module Expr Expr where
 --   (*^) = (*)
 instance AbelianAdditive Expr
-instance Module Rational Expr where
+instance Scalable Rational Expr where
   k *^ E x = E (fromRational k*x)
-instance Module Constant Expr where
+instance Scalable Constant Expr where
   k *^ E x = E (fromDouble k*x)
 
 -- | Some action to perform after a solution has been found.
@@ -119,7 +119,7 @@ data DiagramState = DiagramState
 
 $(makeLenses ''DiagramState)
 
-newtype Diagram lab m a = Dia {fromDia :: (RWST (Env lab m) [Freeze m] DiagramState m a)}
+newtype Diagram lab m a = Dia {fromDia :: RWST (Env lab m) [Freeze m] DiagramState m a}
   deriving (Monad, Applicative, Functor, MonadReader (Env lab m), MonadWriter [Freeze m], MonadState DiagramState)
 
 instance MonadFail m => MonadFail (Diagram lab m) where
@@ -138,7 +138,7 @@ runDiagram :: Monad m => Backend lab m -> Diagram lab m a -> m a
 runDiagram backend diag = do
   let env = Env one defaultPathOptions backend
   (a,finalState,ds) <- runRWST (fromDia $ do x<-diag;resolveNonOverlaps;return x) env $
-    DiagramState (Var 0) [] zero (M.empty) []
+    DiagramState (Var 0) [] zero M.empty []
   let maxVar =  finalState ^. diaNextVar
       decls = [sexp ["declare-const", smtVar x, "Real"] | x <- [Var 0 .. maxVar]]
       constrs = intercalate "\n" $ map fromS $
@@ -303,7 +303,7 @@ instance Additive (SExpr) where
   zero = S "0"
 instance AbelianAdditive (SExpr)
 instance Field (SExpr)
-instance Module SExpr SExpr where
+instance Scalable SExpr SExpr where
   (*^) = (*)
 instance Ring (SExpr)
 instance Group (SExpr) where

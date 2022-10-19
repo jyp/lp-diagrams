@@ -12,16 +12,16 @@ data LinFunc v c = Func (Map v c) c
 type Constraint v c = LinFunc v c
 
 
-instance (Additive c,Ord v) => Additive (LinFunc v c) where
+instance (AbelianAdditive c,Ord v) => Additive (LinFunc v c) where
   zero = Func zero zero
   Func f1 k1 + Func f2 k2 = Func (f1 + f2) (k1 + k2)
 
-instance (Ord v, Group c) => Group (LinFunc v c) where
+instance (Ord v, AbelianAdditive c, Group c) => Group (LinFunc v c) where
   negate = fmap negate
 
 instance (Ord v,AbelianAdditive c) => AbelianAdditive (LinFunc v c) where
 
-instance (Ord v,Ring c) => Module c (LinFunc v c) where
+instance (Ord v,Ring c) => Scalable c (LinFunc v c) where
   s *^ Func f k = Func (s *^ f) (s * k)
 
 clean :: (Eq v, Eq c, Ring c) => LinFunc v c -> LinFunc v c

@@ -8,7 +8,7 @@ import Graphics.Diagrams.Point
 import Graphics.Diagrams.Shape
 import Control.Monad (forM_,forM)
 import Algebra.Classes
-import Prelude hiding (Num(..),(/))
+import Prelude hiding (Num(..),(/),Floating(..))
 
 type Vec2 = Point'
 type Transform a = Iso a Constant
@@ -30,8 +30,8 @@ axisGen origin target anch labels = do
       return l0
 
 -- | @scale minx maxx@ maps the interval [minx,maxx] to [0,1]
-scale :: forall b. Field b => b -> b -> Iso b b
-scale minx maxx = Iso (\x -> (x - minx) / (maxx - minx))
+rescale :: forall b. Field b => b -> b -> Iso b b
+rescale minx maxx = Iso (\x -> (x - minx) / (maxx - minx))
                       (\x -> x * (maxx - minx) + minx)
 
 -- | Make a number of steps
@@ -49,7 +49,7 @@ vAxis bx = axisGen (bx # SW) (bx # NW) E
 -- | Draw axes. Coordinates in the [0,1] fit the box.
 axes :: Monad m => Box -> Vec2 [(Constant, lab)] -> Diagram lab m [Box]
 axes bx zs = (++) <$> d1 <*> d2
-  where Point d1 d2 = (Point hAxis vAxis) <*> pure bx <*> zs
+  where Point d1 d2 = Point hAxis vAxis <*> pure bx <*> zs
 
 -- | Multiply the vector (origin --> target) by p. (Linear interpolation)
 lint :: Constant -> Expr -> Expr -> Expr
@@ -86,7 +86,7 @@ after :: Iso b c -> Iso a b -> Iso a c
 (Iso f g) `after` (Iso h i) = Iso (f . h) (i . g)
 
 axisMarks :: a -> a -> Iso a Constant -> (a,[a],a)
-axisMarks lo hi trans = (u lo',(map u [lo'..hi']),u hi')
+axisMarks lo hi trans = (u lo',map u [lo'..hi'],u hi')
   where u = backward trans
         t = forward trans
         lo' = fromIntegral $ (floor (t lo) :: Integer)
@@ -104,7 +104,7 @@ type ShowFct lab a = a -> lab
 
 mkAxes :: Vec2 (Transform a) -> Vec2 a -> Vec2 a -> (Vec2 [a], Vec2 (Transform a))
 mkAxes axesXform lows highs = (mrks <$> axisInfo,
-                               after <$> (scale <$> minz <*> maxz) <*> axesXform)
+                               after <$> (rescale <$> minz <*> maxz) <*> axesXform)
   where axisInfo = axisMarks <$> lows <*> highs <*> axesXform
         minz = t <*> (lo <$> axisInfo)
         maxz = t <*> (hi <$> axisInfo)

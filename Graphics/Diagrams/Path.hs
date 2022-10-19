@@ -8,7 +8,7 @@ import Data.Foldable
 import Graphics.Typography.Geometry.Bezier
 import Data.List (sort)
 import Data.Maybe (listToMaybe)
-import Prelude hiding (sum,mapM_,mapM,concatMap,maximum,minimum,Num(..),(/))
+import Prelude hiding (sum,mapM_,mapM,concatMap,maximum,minimum,Num(..),(/),sqrt)
 import qualified Data.Vector.Unboxed as V
 import Algebra.Polynomials.Bernstein (restriction,Bernsteinp(..))
 import Control.Lens (over, set, view)
@@ -71,7 +71,7 @@ cutAfter' (b:bs) cutter = case clipOne b cutter of
 -- | Reverse a bezier curve
 revBeziers :: [Curve] -> [Curve]
 revBeziers = reverse . map rev
-  where rev (Bezier cx cy t0 t1) = (Bezier (revBernstein cx) (revBernstein cy) (1-t1) (1-t0))
+  where rev (Bezier cx cy t0 t1) = Bezier (revBernstein cx) (revBernstein cy) (1-t1) (1-t0)
         revBernstein (Bernsteinp n c) = Bernsteinp n (V.reverse c)
 
 cutBefore' pth area = revBeziers $ cutAfter' (revBeziers pth) area
@@ -122,8 +122,8 @@ roundedRectanglePath r (Point x1 y1) (Point x2 y2) =
   [
     CurveTo (Point x1 (y1-k) ) (Point (x1+k) y1) (Point (x1+r) y1),
     StraightTo (Point (x2-r) y1),
-    CurveTo (Point (x2-k) y1) (Point x2 (y1-k)) (Point (x2) (y1-r)),
-    StraightTo (Point (x2) (y2+r)),
+    CurveTo (Point (x2-k) y1) (Point x2 (y1-k)) (Point x2 (y1-r)),
+    StraightTo (Point x2 (y2+r)),
     CurveTo (Point x2 (y2+k)) (Point (x2-k) y2) (Point (x2-r) y2),
     StraightTo (Point (x1+r) (y2)),
     CurveTo (Point (x1+k) y2) (Point (x1) (y2+k)) (Point x1 (y2+r)),
