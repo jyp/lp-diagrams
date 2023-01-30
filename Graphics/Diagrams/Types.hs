@@ -38,7 +38,7 @@ instance Show a => Show (Pair a) where
 data Point' a = Point {xpart :: a, ypart :: a}
   deriving (Eq,Show,Functor)
 
-instance Module k a => Scalable k (Point' a) where
+instance Scalable k a => Scalable k (Point' a) where
   (*^) scalar = fmap (scalar *^)
 
 instance Traversable Point' where
@@ -60,8 +60,6 @@ instance AbelianAdditive v => AbelianAdditive (Point' v) where
 instance Group v => Group (Point' v) where
   negate (Point x y) = Point (negate x) (negate y)
   Point x1 y1 - Point x2 y2 = Point (x1 - x2) (y1 - y2)
-
-
 
 data Segment v = CurveTo (Point' v) (Point' v) (Point' v)
                    | StraightTo (Point' v)
