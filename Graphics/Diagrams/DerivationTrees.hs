@@ -22,6 +22,7 @@ derivationTreeDiag, delayD
 import Control.Monad.Writer
 import Data.LabeledTree
 import Data.Monoid
+import Control.Monad (forM, forM_)
 import Graphics.Diagrams as D hiding (label)
 import qualified Data.Tree as T
 import Algebra.Classes

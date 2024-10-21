@@ -52,10 +52,6 @@ newtype R env y = R {_fromR :: env -> y}
 instance Applicative (R env) where
   pure x = R (\_ -> x)
   R f <*> R x = R (\rho -> (f rho) (x rho))
-liftA2 :: forall (f :: * -> *) a b a1.
-            Applicative f =>
-            (a1 -> a -> b) -> f a1 -> f a -> f b
-liftA2 f x y = f <$> x <*> y
 instance IsDouble x => IsDouble (R env x) where
   fromDouble x = pure (fromDouble x)
   -- sqrtE = fmap sqrtE
