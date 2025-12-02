@@ -174,12 +174,12 @@ toDiagram layerHeight (Node Rule{..} premises) = do
 
 
   -- layout hints (not necessary for "correctness")
-  let xd = xdiff (separ # W) (psGrp # W)
-  xd   === xdiff (psGrp # E) (separ # E)
-  relax 2 $ (2 *- xd) =~= premisesDist
-  -- centering of conclusion
-  (xpart (separ # Center) - xpart (concl # Center)) === zero
-  -- minimize (xpart (separ # Center) - xpart (concl # Center)) -- does not produce the expected results with current z3 version
+  -- let xd = xdiff (separ # W) (psGrp # W)
+  -- xd   === xdiff (psGrp # E) (separ # E)
+  -- relax 2 $ (2 *- xd) =~= premisesDist
+  
+  -- centering the conclusion
+  minimize $ absE $ (xpart (separ # Center) - xpart (concl # Center))
 
   -- draw the rule.
   using ruleStyle $ path $ polyline [separ # W,separ # E]
