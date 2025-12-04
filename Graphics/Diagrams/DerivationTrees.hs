@@ -76,15 +76,17 @@ derivationTreeDiag d = do
   minimize h
   h >== constant 1
   tree@(T.Node (_,n,_) _) <- toDiagram h d
-  forM_ (T.levels tree) $ \ls ->
-    case ls of
+  forM_ (T.levels tree) $ \level ->
+    case level of
       [] -> return ()
-      (_:ls') -> forM_ (zip ls ls') $ \((_,_,l),(r,_,_)) ->
-        (l + Point (constant 10) zero) `westOf` r
+      (_:level') ->do
+        D.align ypart $ map (# Base) [concl | (_,concl,_) <- level ] -- make sure that baselines agree across each level throughout (otherwise, ugly)
+        forM_ (zip level level') $ \((_,_,l),(r,_,_)) ->
+          (l + Point (constant 10) zero) `westOf` r
   let leftFringe = map head nonNilLevs
       rightFringe = map last nonNilLevs
       nonNilLevs = filter (not . null) $ T.levels tree
-  leftMost <- newVar "leftMost"; rightMost <- newVar "rightMost" 
+  leftMost <- newVar "leftMost"; rightMost <- newVar "rightMost"
   forM_ leftFringe $ \(p,_,_) ->
     leftMost <== xpart p
   forM_ rightFringe $ \(_,_,p) ->
@@ -121,8 +123,11 @@ chainBases _ [] = do
   return (o,zero)
 chainBases spacing ls = do
   grp <- obj box "grp"
-  forM_ [Base,N,S] $ \ anch -> do
-    D.align ypart $ map (# anch) (grp:ls)
+  D.align ypart $ map (# Base) (grp:ls)
+  forM_ ls $ \l -> do
+    ypart (grp # S) <== ypart (l # S)
+    ypart (l # N) <== ypart (grp # N)
+
   dxs <- forM (zip ls (tail ls)) $ \(x,y) -> do
     let dx = xdiff (x # E) (y # W)
     dx >== spacing
@@ -132,7 +137,7 @@ chainBases spacing ls = do
   return (grp,avg dxs)
 
 debug :: Monad m => m a -> m ()
-debug x = return () 
+debug x = return ()
 -- debug x = x >> return ()
 
 -- | Put object in a box of the same vertical extent, and baseline,
@@ -155,18 +160,18 @@ toDiagram layerHeight (Node Rule{..} premises) = do
   lab <- rawLabel "rulename" ruleLabel
 
   -- Grouping
-  (psGrp,premisesDist) <- chainBases (constant 10) [p | T.Node (_,p,_) _ <- ps]
-  debug $ using denselyDotted $ traceBox "blue" psGrp
-  height psGrp === case ps of
+  (premisesGroup,premisesDist) <- chainBases (constant 10) [p | T.Node (_,p,_) _ <- ps]
+  debug $ using denselyDotted $ traceBox "blue" premisesGroup
+  height premisesGroup === case ps of
                      [] -> zero
                      _ -> layerHeight
 
   -- Separation rule
   separ <- hrule "separation"
-  separ # N .=. psGrp # S
+  separ # N .=. premisesGroup # S
   align ypart [concl # N,separ # S]
   minimize $ width separ
-  psGrp `fitsHorizontallyIn` separ
+  premisesGroup `fitsHorizontallyIn` separ
   concl `sloppyFitsHorizontallyIn` separ
 
   -- rule label
@@ -174,12 +179,11 @@ toDiagram layerHeight (Node Rule{..} premises) = do
 
 
   -- layout hints (not necessary for "correctness")
-  -- let xd = xdiff (separ # W) (psGrp # W)
-  -- xd   === xdiff (psGrp # E) (separ # E)
+  -- let xd = xdiff (separ # W) (premisesGroup # W)
+  -- xd   === xdiff (premisesGroup # E) (separ # E)
   -- relax 2 $ (2 *- xd) =~= premisesDist
-  
-  -- centering the conclusion
-  minimize $ absE $ (xpart (separ # Center) - xpart (concl # Center))
+  -- try to center the conclusion:
+  minimize (absE (xpart (separ # Center) - xpart (concl # Center)))
 
   -- draw the rule.
   using ruleStyle $ path $ polyline [separ # W,separ # E]
