@@ -7,7 +7,7 @@ module Data.LabeledTree,
 
 -- * Derivation' building
 -- axiom, rule, etc, aborted,
-emptyDrv, haltDrv', delayPre,
+emptyDrv, haltDrv',
 dummy, rule, Derivation, Premise, Rule(..),
 
 -- * Links
@@ -19,7 +19,6 @@ derivationTreeDiag, delayD
 ) where
 
 -- import DerivationTrees.Basics
-import Control.Monad.Writer
 import Data.LabeledTree
 import Data.Monoid
 import Control.Monad (forM, forM_)
@@ -57,8 +56,8 @@ isDelayed :: Premise lab -> Bool
 isDelayed (Delayed{} ::> _) = True
 isDelayed _ = False
 
-delayPre :: forall lab a. Int -> Link lab ::> a -> Link lab ::> a
-delayPre s (Link {..} ::> j) = Link {steps = s, ..} ::> j
+-- delayPre :: forall lab a. Int -> Link lab ::> a -> Link lab ::> a
+-- delayPre s (Link {..} ::> j) = Link {steps = s, ..} ::> j
 
 delayD :: Monoid lab => Derivation lab -> Derivation lab
 delayD (Node r ps0) = Node r (map delayP ps)
@@ -95,6 +94,7 @@ derivationTreeDiag d = do
   n # Center .=. zero
 
 toDiagPart :: Monad m => Expr -> Premise lab -> Diagram lab m (T.Tree (Point,Object,Point))
+toDiagPart _ (Delayed ::> _) = error "first use delayD to get rid of Delay links"
 toDiagPart layerHeight (Link{..} ::> rul)
   | steps == 0 = toDiagram layerHeight rul
   | otherwise = do
@@ -124,9 +124,7 @@ chainBases _ [] = do
 chainBases spacing ls = do
   grp <- obj box "grp"
   D.align ypart $ map (# Base) (grp:ls)
-  forM_ ls $ \l -> do
-    ypart (grp # S) <== ypart (l # S)
-    ypart (l # N) <== ypart (grp # N)
+  forM_ ls $ \l -> do l `fitsVerticallyIn` grp
 
   dxs <- forM (zip ls (tail ls)) $ \(x,y) -> do
     let dx = xdiff (x # E) (y # W)
@@ -140,22 +138,10 @@ debug :: Monad m => m a -> m ()
 debug x = return ()
 -- debug x = x >> return ()
 
--- | Put object in a box of the same vertical extent, and baseline,
--- but whose height can be bigger.
-relaxHeight :: (Monad m) => Object -> Diagram lab m Object
-relaxHeight o = do
-  b <- obj box "relaxed"
-  debug $ traceBox "green" o
-  D.align xpart [b#W,o#W]
-  D.align xpart [b#E,o#E]
-  D.align ypart [b#Base,o#Base]
-  o `fitsVerticallyIn` b
-  return b
-
 toDiagram :: Monad m => Expr -> Derivation lab -> Diagram lab m (T.Tree (Point,Object,Point))
 toDiagram layerHeight (Node Rule{..} premises) = do
   ps <- mapM (toDiagPart layerHeight) premises
-  concl <- relaxHeight =<< extend (constant 1.5) <$> rawLabel "concl" conclusion
+  concl <- extend (constant 1.5) <$> rawLabel "concl" conclusion
   debug $ traceBox "red" concl
   lab <- rawLabel "rulename" ruleLabel
 
@@ -183,7 +169,7 @@ toDiagram layerHeight (Node Rule{..} premises) = do
   -- xd   === xdiff (premisesGroup # E) (separ # E)
   -- relax 2 $ (2 *- xd) =~= premisesDist
   -- try to center the conclusion:
-  minimize (absE (xpart (separ # Center) - xpart (concl # Center)))
+  xpart (separ # Center) =~= xpart (concl # Center)
 
   -- draw the rule.
   using ruleStyle $ path $ polyline [separ # W,separ # E]
