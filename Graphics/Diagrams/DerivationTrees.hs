@@ -40,8 +40,7 @@ defaultLink = Link mempty (denselyDotted . outline "black")  0
 
 -------------------
 
-data Rule lab = Rule {ruleStyle :: LineStyle, delimiter :: lab, ruleLabel :: lab, conclusion :: lab}
---  deriving Show
+data Rule lab = Rule {ruleStyle :: LineStyle, delimiter :: lab, leftLabel :: lab, rightLabel :: lab,  conclusion :: lab}
 
 type Premise lab = Link lab ::> Derivation lab
 type Derivation lab = Tree (Link lab) (Rule lab)
@@ -143,7 +142,8 @@ toDiagram layerHeight (Node Rule{..} premises) = do
   ps <- mapM (toDiagPart layerHeight) premises
   concl <- extend (constant 1.5) <$> rawLabel "concl" conclusion
   debug $ traceBox "red" concl
-  lab <- rawLabel "rulename" ruleLabel
+  rightLab <- rawLabel "rule_right" rightLabel
+  leftLab <- rawLabel "rule_left" leftLabel
 
   -- Grouping
   (premisesGroup,premisesDist) <- chainBases (constant 10) [p | T.Node (_,p,_) _ <- ps]
@@ -161,7 +161,8 @@ toDiagram layerHeight (Node Rule{..} premises) = do
   concl `sloppyFitsHorizontallyIn` separ
 
   -- rule label
-  lab # BaseW .=. separ # E + Point (constant 3) (constant (negate 1))
+  rightLab # BaseW .=. separ # E + Point (constant 3) (constant (- 2)) 
+  leftLab # BaseE .=. separ # W + Point (constant (-3)) (constant (- 2))
 
 
   -- layout hints (not necessary for "correctness")
@@ -173,16 +174,20 @@ toDiagram layerHeight (Node Rule{..} premises) = do
 
   -- draw the rule.
   using ruleStyle $ path $ polyline [separ # W,separ # E]
-  return $ T.Node (separ # W, concl, lab # E) ps
+  return $ T.Node (leftLab # W, concl, rightLab # E) ps
 
 -----------------------
 
 
-rule :: Monoid lab => lab -> lab -> Rule lab
-rule ruleLabel conclusion = Rule {delimiter = mempty, ruleStyle = outline "black", ..}
+rule :: Monoid lab => lab -> Rule lab
+rule conclusion = Rule {delimiter = mempty,
+                        ruleStyle = outline "black" ,
+                        leftLabel = mempty,
+                        rightLabel = mempty,
+                        conclusion = conclusion}
 
 dummy :: Monoid lab => Rule lab
-dummy = (rule mempty mempty) {ruleStyle = const defaultPathOptions}
+dummy = (rule mempty) {ruleStyle = const defaultPathOptions}
 
 emptyDrv :: forall k lab. Monoid lab => Tree k (Rule lab)
 emptyDrv = Node dummy []
