@@ -76,6 +76,10 @@ align :: Monad m => (a -> Expr) -> [a] -> Diagram lab m ()
 align _ [] = return ()
 align f (p:ps) = forM_ ps $ \p' -> f p === f p'
 
+alignApproximately :: Monad m => (a -> Expr) -> [a] -> Diagram lab m ()
+alignApproximately _ [] = return ()
+alignApproximately f (p:ps) = forM_ ps $ \p' -> f p =~= f p'
+
 alignMatrix :: Monad m => [[Point]] -> Diagram lab m ()
 alignMatrix ls = do
   forM_ ls alignHoriz

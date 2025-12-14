@@ -139,12 +139,20 @@ ascent o = ypart (o # N - o # Base)
 descent o = ypart (o # Base - o # S)
 
 
-sloppyFitsHorizontallyIn :: Monad m => Object -> Object -> Diagram lab m ()
+sloppyFitsVerticallyIn,sloppyFitsHorizontallyIn :: Monad m => Object -> Object -> Diagram lab m ()
 o `sloppyFitsHorizontallyIn` o' = do
   let dyW = xpart $ o # W - o' # W
       dyE = xpart $ o' # E - o # E
   dyW >== zero
   dyE >== zero
+o `sloppyFitsVerticallyIn` o' = do
+  let dyN = ypart $ o' # N - o # N
+      dyS = ypart $ o # S - o' # S
+  minimize dyN
+  dyN >== zero
+  minimize dyS
+  dyS >== zero
+
 
 -- | Make one object fit (snugly) in the other.
 fitsIn, fitsHorizontallyIn, fitsVerticallyIn
@@ -168,6 +176,11 @@ o `fitsHorizontallyIn` o' = do
 a `fitsIn` b = do
   a `fitsHorizontallyIn` b
   a `fitsVerticallyIn` b
+
+sloppyFitsIn :: Monad m => Object -> Object -> Diagram lab m ()
+a `sloppyFitsIn` b = do
+  a `sloppyFitsHorizontallyIn` b
+  a `sloppyFitsVerticallyIn` b
 
 
 -- | Debug, by tracing the bounding box of the object in a certain color.

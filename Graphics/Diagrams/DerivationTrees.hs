@@ -70,10 +70,7 @@ delayD (Node r ps0) = Node r (map delayP ps)
 
 derivationTreeDiag :: Monad m => Derivation lab -> Diagram lab m ()
 derivationTreeDiag d = do
-  h <- newVar "height" -- the height of a layer in the tree.
-  minimize h
-  h >== constant 1
-  tree@(T.Node (_,n,_) _) <- toDiagram h d
+  tree@(T.Node (_,n,_) _) <- toDiagram d
   forM_ (T.levels tree) $ \level ->
     case level of
       [] -> return ()
@@ -92,23 +89,35 @@ derivationTreeDiag d = do
   tighten 10 $ minimize $ (rightMost - leftMost)
   n # Center .=. zero
 
-toDiagPart :: Monad m => Expr -> Premise lab -> Diagram lab m (T.Tree (Point,Object,Point))
-toDiagPart _ (Delayed ::> _) = error "first use delayD to get rid of Delay links"
-toDiagPart layerHeight (Link{..} ::> rul)
-  | steps == 0 = toDiagram layerHeight rul
+treeConcl :: T.Tree (Point,Object,Point) -> Object
+treeConcl (T.Node (_,concl,_) _) = concl
+
+toDiagPart :: forall m lab. Monad m => Premise lab -> Diagram lab m (T.Tree (Point,Object,Point))
+toDiagPart (Delayed ::> _) = error "first use delayD to get rid of Delay links"
+toDiagPart (Link{..} ::> rul)
+  | steps == 0 = toDiagram rul
   | otherwise = do
-    above@(T.Node (_,concl,_) _) <- toDiagram layerHeight rul
-    ptObj <- vrule "ptObj"
-    let pt = ptObj # S
-    pt `eastOf` (concl # W)
-    pt `westOf` (concl # E)
-    (xpart pt) =~= (xpart (concl # Center))
-    let top = ypart (concl # S)
-    ypart pt + (fromIntegral steps *- layerHeight) === top
-    using linkStyle $ path $ polyline [ptObj # Base,Point (xpart pt) top]
-    let embedPt 1 x = T.Node (concl # W,ptObj,concl # E) [x]
-        embedPt n x = T.Node (pt,ptObj,pt) [embedPt (n-1) x]
-    return $ embedPt steps above
+    linkObj <- vrule "linkObj"
+    linkLab <- extend (constant 1.5) <$> rawLabel "link_label" label
+    linkLab # W .=. linkObj # Center
+    extend (constant 2) linkLab `sloppyFitsVerticallyIn` linkObj
+    let pt = linkObj # S
+    let embedPt :: Int -> Diagram lab m (T.Tree (Point,Object,Point))
+        embedPt 1 = do
+          above <- toDiagram rul
+          let concl = treeConcl above
+          linkObj `sloppyFitsHorizontallyIn` concl
+          alignApproximately xpart ((# Center) <$> [linkObj, concl])
+          align ypart [linkObj # N, concl # S]
+          using linkStyle $ path $ polyline [linkObj # S,linkObj # N]
+          return  (T.Node (concl # W,linkObj,concl # E) [above])
+        embedPt n = do
+          subObj <- point "subObj"
+          subObj `sloppyFitsIn`linkObj
+          nextAbove <- embedPt (n-1)
+          (subObj # N) `southOf` (treeConcl nextAbove # S)
+          return $ T.Node (pt,subObj,linkLab # E) [nextAbove]
+    embedPt steps
 
 -- | @chainBases distance objects@
 -- - Ensures that all the objects have the same baseline.
@@ -137,9 +146,9 @@ debug :: Monad m => m a -> m ()
 debug x = return ()
 -- debug x = x >> return ()
 
-toDiagram :: Monad m => Expr -> Derivation lab -> Diagram lab m (T.Tree (Point,Object,Point))
-toDiagram layerHeight (Node Rule{..} premises) = do
-  ps <- mapM (toDiagPart layerHeight) premises
+toDiagram :: Monad m => Derivation lab -> Diagram lab m (T.Tree (Point,Object,Point))
+toDiagram (Node Rule{..} premises) = do
+  ps <- mapM toDiagPart premises
   concl <- extend (constant 1.5) <$> rawLabel "concl" conclusion
   debug $ traceBox "red" concl
   rightLab <- rawLabel "rule_right" rightLabel
@@ -148,9 +157,6 @@ toDiagram layerHeight (Node Rule{..} premises) = do
   -- Grouping
   (premisesGroup,premisesDist) <- chainBases (constant 10) [p | T.Node (_,p,_) _ <- ps]
   debug $ using denselyDotted $ traceBox "blue" premisesGroup
-  height premisesGroup === case ps of
-                     [] -> zero
-                     _ -> layerHeight
 
   -- Separation rule
   separ <- hrule "separation"
@@ -160,7 +166,7 @@ toDiagram layerHeight (Node Rule{..} premises) = do
   premisesGroup `fitsHorizontallyIn` separ
   concl `sloppyFitsHorizontallyIn` separ
 
-  -- rule label
+  -- rule labels
   rightLab # BaseW .=. separ # E + Point (constant 3) (constant (- 2)) 
   leftLab # BaseE .=. separ # W + Point (constant (-3)) (constant (- 2))
 
@@ -170,9 +176,9 @@ toDiagram layerHeight (Node Rule{..} premises) = do
   -- xd   === xdiff (premisesGroup # E) (separ # E)
   -- relax 2 $ (2 *- xd) =~= premisesDist
   -- try to center the conclusion:
-  xpart (separ # Center) =~= xpart (concl # Center)
+  alignApproximately xpart ((# Center) <$> [separ,concl])
 
-  -- draw the rule.
+  -- draw the rule line.
   using ruleStyle $ path $ polyline [separ # W,separ # E]
   return $ T.Node (leftLab # W, concl, rightLab # E) ps
 
