@@ -40,7 +40,7 @@ defaultLink = Link mempty (denselyDotted . outline "black")  0
 
 -------------------
 
-data Rule lab = Rule {ruleStyle :: LineStyle, delimiter :: lab, leftLabel :: lab, rightLabel :: lab,  conclusion :: lab}
+data Rule lab = Rule {ruleStyle :: LineStyle, leftLabel, rightLabel :: Maybe lab,  conclusion :: lab}
 
 type Premise lab = Link lab ::> Derivation lab
 type Derivation lab = Tree (Link lab) (Rule lab)
@@ -77,7 +77,7 @@ derivationTreeDiag d = do
       (_:level') ->do
         D.align ypart $ map (# Base) [concl | (_,concl,_) <- level ] -- make sure that baselines agree across each level throughout (otherwise, ugly)
         forM_ (zip level level') $ \((_,_,l),(r,_,_)) ->
-          (l + Point (constant 10) zero) `westOf` r
+          (l + Point (constant 8) zero) `westOf` r
   let leftFringe = map head nonNilLevs
       rightFringe = map last nonNilLevs
       nonNilLevs = filter (not . null) $ T.levels tree
@@ -151,8 +151,6 @@ toDiagram (Node Rule{..} premises) = do
   ps <- mapM toDiagPart premises
   concl <- extend (constant 1.5) <$> rawLabel "concl" conclusion
   debug $ traceBox "red" concl
-  rightLab <- rawLabel "rule_right" rightLabel
-  leftLab <- rawLabel "rule_left" leftLabel
 
   -- Grouping
   (premisesGroup,premisesDist) <- chainBases (constant 10) [p | T.Node (_,p,_) _ <- ps]
@@ -160,15 +158,22 @@ toDiagram (Node Rule{..} premises) = do
 
   -- Separation rule
   separ <- hrule "separation"
-  separ # N .=. premisesGroup # S
+  align ypart [separ # N, premisesGroup # S]
+  relax 10 $ alignApproximately xpart [separ # N, premisesGroup # S]
   align ypart [concl # N,separ # S]
   minimize $ width separ
   premisesGroup `fitsHorizontallyIn` separ
   concl `sloppyFitsHorizontallyIn` separ
 
   -- rule labels
-  rightLab # BaseW .=. separ # E + Point (constant 3) (constant (- 2)) 
-  leftLab # BaseE .=. separ # W + Point (constant (-3)) (constant (- 2))
+  rightLab <-  forM rightLabel $ \l -> do
+    l' <- rawLabel "rule_right" l
+    l' # BaseW .=. separ # E + Point (constant 3) (constant (- 2))
+    return l'
+  leftLab <- forM leftLabel $ \l -> do
+    l' <- rawLabel "rule_left" l
+    l' # BaseE .=. separ # W + Point (constant (-3)) (constant (- 2))
+    return l'
 
 
   -- layout hints (not necessary for "correctness")
@@ -176,20 +181,19 @@ toDiagram (Node Rule{..} premises) = do
   -- xd   === xdiff (premisesGroup # E) (separ # E)
   -- relax 2 $ (2 *- xd) =~= premisesDist
   -- try to center the conclusion:
-  alignApproximately xpart ((# Center) <$> [separ,concl])
+  relax 10 $ alignApproximately xpart ((# Center) <$> [separ,concl])
 
   -- draw the rule line.
   using ruleStyle $ path $ polyline [separ # W,separ # E]
-  return $ T.Node (leftLab # W, concl, rightLab # E) ps
+  return $ T.Node ((maybe separ id leftLab) # W, concl, (maybe separ id rightLab) # E) ps
 
 -----------------------
 
 
 rule :: Monoid lab => lab -> Rule lab
-rule conclusion = Rule {delimiter = mempty,
-                        ruleStyle = outline "black" ,
-                        leftLabel = mempty,
-                        rightLabel = mempty,
+rule conclusion = Rule {ruleStyle = outline "black" ,
+                        leftLabel = Nothing,
+                        rightLabel = Nothing,
                         conclusion = conclusion}
 
 dummy :: Monoid lab => Rule lab
