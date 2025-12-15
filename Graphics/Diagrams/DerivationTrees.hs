@@ -159,7 +159,8 @@ toDiagram (Node Rule{..} premises) = do
   -- Separation rule
   separ <- hrule "separation"
   align ypart [separ # N, premisesGroup # S]
-  relax 10 $ alignApproximately xpart [separ # N, premisesGroup # S]
+  -- relax 10 $ alignApproximately xpart [separ # N, premisesGroup # S]
+  align xpart [separ # N, premisesGroup # S] -- align exactly the separator with the premise group. Much faster resolution and better result in most cases.
   align ypart [concl # N,separ # S]
   minimize $ width separ
   premisesGroup `fitsHorizontallyIn` separ
@@ -175,14 +176,9 @@ toDiagram (Node Rule{..} premises) = do
     l' # BaseE .=. separ # W + Point (constant (-3)) (constant (- 2))
     return l'
 
-
-  -- layout hints (not necessary for "correctness")
-  -- let xd = xdiff (separ # W) (premisesGroup # W)
-  -- xd   === xdiff (premisesGroup # E) (separ # E)
-  -- relax 2 $ (2 *- xd) =~= premisesDist
   -- try to center the conclusion:
   relax 10 $ alignApproximately xpart ((# Center) <$> [separ,concl])
-
+  
   -- draw the rule line.
   using ruleStyle $ path $ polyline [separ # W,separ # E]
   return $ T.Node ((maybe separ id leftLab) # W, concl, (maybe separ id rightLab) # E) ps
