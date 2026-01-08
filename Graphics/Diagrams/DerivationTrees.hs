@@ -99,7 +99,7 @@ toDiagPart (Link{..} ::> rul)
   | otherwise = do
     linkObj <- vrule "linkObj"
     linkLab <- extend (constant 1.5) <$> rawLabel "link_label" label
-    linkLab # W .=. linkObj # Center
+    linkLab # E .=. linkObj # Center
     extend (constant 2) linkLab `sloppyFitsVerticallyIn` linkObj
     let pt = linkObj # S
     let embedPt :: Int -> Diagram lab m (T.Tree (Point,Object,Point))
@@ -116,7 +116,7 @@ toDiagPart (Link{..} ::> rul)
           subObj `sloppyFitsIn`linkObj
           nextAbove <- embedPt (n-1)
           (subObj # N) `southOf` (treeConcl nextAbove # S)
-          return $ T.Node (pt,subObj,linkLab # E) [nextAbove]
+          return $ T.Node (linkLab # W,subObj,pt) [nextAbove]
     embedPt steps
 
 -- | @chainBases distance objects@
